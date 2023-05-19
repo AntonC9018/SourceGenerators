@@ -1,0 +1,1 @@
+The polyfills and the msbuild configuration were mostly copied from [ComputeSharp](https://github.com/Sergio0694/ComputeSharp/tree/main).

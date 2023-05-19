@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\AutoImplementedProperties.Shared.Sources\Include.targets" />
+  <ItemGroup>
+    <Compile Include="..\SourceGeneration\Helpers\SpanHelper.cs">
+      <Link>Helpers\SpanHelper.cs</Link>
+    </Compile>
+  </ItemGroup>
+</Project>

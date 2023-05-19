@@ -1,0 +1,27 @@
+<Project>
+    <PropertyGroup>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>11.0</LangVersion>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == '' and $(MSBuildProjectName.EndsWith('.SourceGenerator'))">
+        <IsSourceGenerator>true</IsSourceGenerator>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <IsRoslynComponent>true</IsRoslynComponent>
+
+        <NoWarn>$(NoWarn);CS1591;CS0649;CS1574</NoWarn>
+        <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
+    </PropertyGroup>
+
+    <!-- Configure PolySharp options -->
+    <PropertyGroup>
+        <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
+    </PropertyGroup>
+</Project>
