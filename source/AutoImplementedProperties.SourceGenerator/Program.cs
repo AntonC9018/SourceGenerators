@@ -48,26 +48,39 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
             public string InterfaceNameForExplicitImpl { get; set; }
         }
         public bool HasPropertiesToImplement => PropertiesToImplement.Any()
-                                                || OverloadedPropertiesToImplement.Any(); 
+            || OverloadedPropertiesToImplement.Any();
         public required EquatableArray<Property> PropertiesToImplement { get; init; }
         public required EquatableArray<OverloadedProperty> OverloadedPropertiesToImplement { get; init; }
         public required HierarchyInfo Hierarchy { get; init; }
     }
-    
+
+    private static readonly SymbolDisplayFormat FullyQualifiedWithNullability =
+        new SymbolDisplayFormat(
+            globalNamespaceStyle:
+                SymbolDisplayGlobalNamespaceStyle.Included,
+            typeQualificationStyle:
+                SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+            genericsOptions:
+                SymbolDisplayGenericsOptions.IncludeTypeParameters,
+            miscellaneousOptions:
+                SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
+                SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
+                SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     private static Info GetInfo(ShouldBeAutogened.TypedGeneratorContext context)
     {
         var interfaceProperties = context.TargetSymbol
             .AllInterfaces
             .SelectMany(i => i.GetMembers().OfType<IPropertySymbol>())
             .Where(p => p.GetMethod is not null && p.SetMethod is not null);
-        
+
         var interfacePropsSet = new HashSet<IPropertySymbol>(
             interfaceProperties, SymbolEqualityComparer.Default);
 
         var allProperties = context.TargetSymbol
             .GetAllMembers()
             .OfType<IPropertySymbol>();
-        
+
         foreach (var p in allProperties)
         {
             if (p.GetMethod is null || p.SetMethod is null)
@@ -88,7 +101,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
 
         using var propertiesToImplement = ImmutableArrayBuilder<Info.Property>.Rent();
         using var overloadedPropertiesToImplement = ImmutableArrayBuilder<Info.OverloadedProperty>.Rent();
-        
+
         foreach (var group in propsByName)
         {
             using var enumerator = group.AsEnumerable().GetEnumerator();
@@ -99,10 +112,10 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
                 return new Info.Property
                 {
                     Name = p.Name,
-                    TypeDisplayName = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    TypeDisplayName = p.Type.ToDisplayString(FullyQualifiedWithNullability),
                 };
             }
-            
+
             Info.OverloadedProperty CreateOverloadedPropInfo(IPropertySymbol p)
             {
                 var info = CreatePropInfo(p);
@@ -110,15 +123,15 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
                 {
                     Property = info,
                     InterfaceNameForExplicitImpl = p.ContainingType
-                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        .ToDisplayString(FullyQualifiedWithNullability),
                 };
                 return info2;
             }
-            
+
             var first = enumerator.Current!;
             if (enumerator.MoveNext() == false)
             {
-                var info = CreatePropInfo(first); 
+                var info = CreatePropInfo(first);
                 propertiesToImplement.Add(info);
             }
             else
@@ -139,7 +152,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         }
 
         var hierarchyInfo = HierarchyInfo.From(context.TargetSymbol);
-        
+
         return new Info
         {
             PropertiesToImplement = propertiesToImplement.ToImmutable(),
