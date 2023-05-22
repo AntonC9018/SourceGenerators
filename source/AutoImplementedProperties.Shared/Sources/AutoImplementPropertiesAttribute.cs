@@ -1,16 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
+using SourceGeneration.Shared;
 
 namespace AutoImplementedProperties.Attributes;
-
-/// <summary>
-/// </summary>
-public static class Constants
-{
-    /// <summary>
-    /// </summary>
-    public const string ConditionString = "SOURCE_GENERATOR";
-}
 
 /// <summary>
 /// </summary>

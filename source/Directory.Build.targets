@@ -8,7 +8,7 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>build;analyzers</IncludeAssets>
         </PackageReference>
-        
+
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -20,10 +20,14 @@
 
     <Import
         Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="SourceGeneration\SourceGeneration.proj"
+        Project="SourceGeneration\Include.targets"
         Label="Shared" />
     <Import
         Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="NetStandard\NetStandard.proj"
+        Project="NetStandard\Include.targets"
         Label="Shared" />
+
+    <ItemGroup Condition="$(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared'">
+        <ProjectReference Include="..\Utils.Shared\Utils.Shared.csproj" />
+    </ItemGroup>
 </Project>

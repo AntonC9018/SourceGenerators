@@ -1,5 +1,0 @@
-<Project>
-    <ItemGroup>
-        <Compile Include="$(MSBuildThisFileDirectory)**/*.cs"></Compile>
-    </ItemGroup>
-</Project>
