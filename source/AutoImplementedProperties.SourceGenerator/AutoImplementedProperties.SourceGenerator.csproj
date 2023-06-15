@@ -1,4 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\AutoImplementedProperties.Shared\Include.targets" />
-  <Import Project="..\Utils.Shared\Include.targets" />
-</Project>

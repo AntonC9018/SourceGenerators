@@ -16,7 +16,7 @@ namespace AutoImplementedProperties.SourceGenerator;
 /// A source generator creating constructors for types annotated with <see cref="AutoConstructorAttribute"/>.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class AutoConstructorGenerator : IIncrementalGenerator
+public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
 {
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
