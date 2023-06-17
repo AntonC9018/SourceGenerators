@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -71,8 +72,7 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
             var directOwnerFilterIdentifier = Identifier("DirectOwnerFilter");
 
             var overloadMethods = new List<MethodDeclarationSyntax>();
-            var tempParams = new ParameterSyntax[2];
-            var tempArguments = new ArgumentSyntax[2];
+            var temp = new TempArrays();
             foreach (var graphNode in graph.Nodes)
             {
                 var directOwnerFilterMethods = overloadMethods;
@@ -88,7 +88,7 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
 
                 /*
 
-                 IQueryable<Entity> DirectOwnerFilter(IQueryable<Entity> query, ID ownerId)
+                 IQueryable<Entity> DirectOwnerFilter(this IQueryable<Entity> query, ID ownerId)
                  {
                     return query.Where(e => e.OwnerId == ownerId);
                  }
@@ -96,43 +96,53 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
                  */
 
                 var parameter = Parameter(Identifier("e"));
-                ExpressionSyntax? lhsExpression = GetOwnerIdExpression(graphNode, IdentifierName(parameter.Identifier));
+                ExpressionSyntax? lhsExpression = GetOwnerIdExpression(
+                    graphNode, IdentifierName(parameter.Identifier));
                 if (lhsExpression is null)
                     continue;
 
                 // e => e.OwnerId == ownerId
-                var lambda = SimpleLambdaExpression(
-                    parameter,
-                    BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        lhsExpression,
-                        IdentifierName(ownerSyntaxCache.IdParameter.Identifier)));
+                var lambda = EqualsCheckLambda(
+                    parameter, lhsExpression, IdentifierName(ownerSyntaxCache.IdParameter.Identifier));
 
                 // query.Where(e => e.OwnerId == ownerId)
-                var whereCall = InvocationExpression(
-                        MemberAccessExpression(
-                            SyntaxKind.SimpleMemberAccessExpression,
-                            IdentifierName(syntaxCache.QueryParameter.Identifier),
-                            IdentifierName("Where")))
-                    .WithArgumentList(
-                        ArgumentList(
-                            SingletonSeparatedList(Argument(lambda))));
+                var whereCall = WhereInvocation(
+                    IdentifierName(syntaxCache.QueryParameter.Identifier), lambda);
 
                 // return ...
                 var returnStatement = ReturnStatement(whereCall);
 
-                // IQueryable<Entity> DirectOwnerFilter(IQueryable<Entity> query, ID ownerId)
-                var method = MethodDeclaration(
-                    returnType: syntaxCache.QueryType,
-                    identifier: directOwnerFilterIdentifier)
-
+                // IQueryable<Entity> DirectOwnerFilter(this IQueryable<Entity> query, ID ownerId)
+                temp.Parameters[0] = syntaxCache.QueryParameter;
+                temp.Parameters[1] = ownerSyntaxCache.IdParameter;
+                var method = FluentExtensionMethod(directOwnerFilterIdentifier, temp.Parameters)
                     .WithBody(Block(returnStatement));
 
-                tempParams[0] = syntaxCache.QueryParameter;
-                tempParams[1] = ownerSyntaxCache.IdParameter;
-                method = method.WithParameterList(ParameterList(SeparatedList(tempParams)));
-
                 directOwnerFilterMethods.Add(method);
+                syntaxCache.DirectOwnerMethod = method;
+            }
+
+            static SimpleLambdaExpressionSyntax EqualsCheckLambda(
+                ParameterSyntax parameter,
+                ExpressionSyntax lhs,
+                ExpressionSyntax rhs)
+            {
+                return SimpleLambdaExpression(
+                    parameter, BinaryExpression(SyntaxKind.EqualsExpression, lhs, rhs));
+            }
+
+            static InvocationExpressionSyntax WhereInvocation(
+                ExpressionSyntax parent,
+                SimpleLambdaExpressionSyntax predicate)
+            {
+                return InvocationExpression(
+                        MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            parent,
+                            IdentifierName("Where")))
+                    .WithArgumentList(
+                        ArgumentList(
+                            SingletonSeparatedList(Argument(predicate))));
             }
 
             var rootOwnerFilterIdentifier = Identifier("RootOwnerFilter");
@@ -140,71 +150,125 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
             {
                 var rootOwnerFilterMethods = overloadMethods;
 
-                if (graphNode is not
-                    {
-                        Cycle: null,
-                        OwnerNavigation: { } ownerNavigation,
-                        SyntaxCache: { } syntaxCache,
-                        OwnerNode: {  } ownerNode,
-                        RootOwner: { SyntaxCache: { } rootOwnerCache } rootOwnerNode,
-                    })
-                {
+                if (graphNode.Cycle is not null)
                     continue;
-                }
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
 
-                var method = MethodDeclaration(
-                    returnType: syntaxCache.QueryType,
-                    identifier: rootOwnerFilterIdentifier);
+                temp.Parameters[0] = syntaxCache.QueryParameter;
 
-                tempParams[0] = syntaxCache.QueryParameter;
-                tempParams[1] = rootOwnerCache.IdParameter;
-                method = method.WithParameterList(ParameterList(SeparatedList(tempParams)));
-
-                if (ReferenceEquals(ownerNode, rootOwnerNode))
+                // If the node is itself the root, meaning it has no owner,
+                // we have to check its own id.
+                MethodDeclarationSyntax? method;
+                if (graphNode.OwnerNode is not { } ownerNode)
                 {
-                    // Just call the root filter:
-                    // return DirectOwnerFilter(query, ownerId);
-                    tempArguments[0] = Argument(IdentifierName(syntaxCache.QueryParameter.Identifier));
-                    tempArguments[1] = Argument(IdentifierName(rootOwnerCache.IdParameter.Identifier));
-                    var invocation = InvocationExpression(IdentifierName(directOwnerFilterIdentifier))
-                        .WithArgumentList(ArgumentList(SeparatedList(tempArguments)));
-                    method = method.WithBody(Block(ReturnStatement(invocation)));
+                    method = GetMethod_SelfIsRoot(syntaxCache);
                 }
                 else
                 {
-                    var entityParameter = Parameter(Identifier("e"));
-                    var parentExpression = IdentifierName(entityParameter.Identifier);
-                    var memberAccessChain = PropertyAccess(parentExpression, ownerNavigation);
-
-                    if (!CompleteMemberAccessChain())
-                        continue;
-
-                    bool CompleteMemberAccessChain()
-                    {
-                        GraphNode node = ownerNode;
-                        GraphNode nodeOwner = ownerNode.OwnerNode!;
-
-                        while (true)
-                        {
-                            if (node.OwnerNavigation is not { } ownerOwnerNavigation)
-                                return false;
-                            memberAccessChain = PropertyAccess(memberAccessChain, node.OwnerNavigation);
-
-                            if (nodeOwner.OwnerNode is not { } potentialRoot)
-                                break;
-
-                            node = nodeOwner;
-                            nodeOwner = potentialRoot;
-                        }
-
-                        // nodeOwner is now the root node, so we can reach for the owner id instead of the navigation.
-                        memberAccessChain = GetOwnerIdExpression(nodeOwner, memberAccessChain);
-
-                        return true;
-                    }
+                    method = GetMethod_RegularOwnerIdChecks(graphNode, syntaxCache);
                 }
 
+                if (method is null)
+                    continue;
+
                 rootOwnerFilterMethods.Add(method);
+                syntaxCache.RootOwnerMethod = method;
+
+
+                MethodDeclarationSyntax? GetMethod_SelfIsRoot(SyntaxCache syntaxCache)
+                {
+                    if (graphNode.IdProperty is not { } idProperty)
+                        return null;
+
+                    temp.Parameters[1] = syntaxCache.IdParameter;
+                    var method = FluentExtensionMethod(rootOwnerFilterIdentifier, temp.Parameters);
+                    // e => e.Id == ownerId
+                    var parameter = Identifier("e");
+                    var lambda = EqualsCheckLambda(
+                        Parameter(parameter),
+                        PropertyAccess(IdentifierName(parameter), idProperty),
+                        IdentifierName(syntaxCache.IdParameter.Identifier));
+                    var whereInvocation = WhereInvocation(
+                        IdentifierName(syntaxCache.QueryParameter.Identifier), lambda);
+                    var returnStatement = ReturnStatement(whereInvocation);
+                    method = method.WithBody(Block(returnStatement));
+                    return method;
+                }
+
+                MethodDeclarationSyntax? GetMethod_RegularOwnerIdChecks(
+                    GraphNode graphNode,
+                    SyntaxCache syntaxCache)
+                {
+                    if (graphNode is not
+                        {
+                            OwnerNavigation: { } ownerNavigation,
+                            RootOwner: { SyntaxCache: { } rootOwnerCache } rootOwnerNode,
+                        })
+                    {
+                        return null;
+                    }
+
+                    temp.Parameters[1] = rootOwnerCache.IdParameter;
+                    var method = FluentExtensionMethod(rootOwnerFilterIdentifier, temp.Parameters);
+
+                    if (ReferenceEquals(graphNode, rootOwnerNode))
+                    {
+                        if (syntaxCache.DirectOwnerMethod is not { } directOwnerMethod)
+                            return null;
+
+                        // Just call the root filter:
+                        // return DirectOwnerFilter(query, ownerId);
+                        temp.Arguments[0] = Argument(IdentifierName(syntaxCache.QueryParameter.Identifier));
+                        temp.Arguments[1] = Argument(IdentifierName(rootOwnerCache.IdParameter.Identifier));
+                        var invocation = InvocationExpression(IdentifierName(directOwnerMethod.Identifier))
+                            .WithArgumentList(ArgumentList(SeparatedList(temp.Arguments)));
+                        return method.WithBody(Block(ReturnStatement(invocation)));
+                    }
+
+                    {
+                        var entityParameter = Parameter(Identifier("e"));
+                        var parentExpression = IdentifierName(entityParameter.Identifier);
+                        var memberAccessChain = PropertyAccess(parentExpression, ownerNavigation);
+
+                        if (!CompleteMemberAccessChain())
+                            return null;
+
+                        var lambda = EqualsCheckLambda(
+                            entityParameter,
+                            memberAccessChain,
+                            IdentifierName(rootOwnerCache.IdParameter.Identifier));
+                        var returnStatement = ReturnStatement(
+                            WhereInvocation(
+                                IdentifierName(syntaxCache.QueryParameter.Identifier),
+                                lambda));
+                        method = method.WithBody(Block(returnStatement));
+                        return method;
+
+                        bool CompleteMemberAccessChain()
+                        {
+                            GraphNode node = graphNode;
+                            GraphNode nodeOwner = graphNode.OwnerNode!;
+
+                            while (true)
+                            {
+                                if (nodeOwner.OwnerNode is not { } potentialRoot)
+                                    break;
+                                if (node.OwnerNavigation is not { } ownerOwnerNavigation)
+                                    return false;
+                                memberAccessChain = PropertyAccess(memberAccessChain, ownerOwnerNavigation);
+
+                                node = nodeOwner;
+                                nodeOwner = potentialRoot;
+                            }
+
+                            // nodeOwner is now the root node, so we can reach for the owner id instead of the navigation.
+                            memberAccessChain = GetOwnerIdExpression(node, memberAccessChain);
+
+                            return true;
+                        }
+                    }
+                }
             }
 
             var overloadClass = ((ClassDeclarationSyntax) ParseMemberDeclaration("""
@@ -213,8 +277,278 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
                 .WithMembers(List<MemberDeclarationSyntax>(overloadMethods));
 
             // Now the switch
+            // The generic method
+            /*
 
+            public static IQueryable<T> DirectOwnerFilter<T, TId>(this IQueryable<T> query, TId ownerId)
+            {
+                if (typeof(T) == typeof(Entity1))
+                {
+                    var q = (IQueryable<Entity1>) query;
+                    var id = Coerce<TId, ID1>(ownerId);
+                    return EntityOwnershipOverloads.DirectOwnerFilter(q, id);
+                }
+                if ...
+
+                throw new InvalidOperationException();
+            }
+
+            public static IQueryable<T> RootOwnerFilter<T, TId>(this IQueryable<T> query, TId ownerId)
+            {
+                if (typeof(T) == typeof(Entity1))
+                {
+                    var q = (IQueryable<Entity1>) query;
+                    var id = Coerce<TId, ID1>(ownerId);
+                    return EntityOwnershipOverloads.RootOwnerFilter(q, id);
+                }
+                if ...
+
+                throw new InvalidOperationException();
+            }
+
+
+            private static U Coerce<T, U>(T value)
+            {
+                if (value is not U u)
+                    throw new WrongIdTypeException(expected: typeof(U), actual: typeof(T));
+                return u;
+            }
+
+             */
+
+            var genericClassMembers = new List<MemberDeclarationSyntax>();
+            var genericContext = GenericContext.Create();
+            var statements = new List<StatementSyntax>(graph.Nodes.Length + 1);
+            genericClassMembers.Add(CreateSwitchMethod(0));
+            genericClassMembers.Add(CreateSwitchMethod(1));
+            genericClassMembers.Add(CreateCoerceMethod());
+
+            MethodDeclarationSyntax CreateSwitchMethod(int methodToCallIndex)
+            {
+                SyntaxToken methodToCallIdentifier = methodToCallIndex switch
+                {
+                    0 => directOwnerFilterIdentifier,
+                    1 => rootOwnerFilterIdentifier,
+                    _ => throw new ArgumentOutOfRangeException(nameof(methodToCallIndex))
+                };
+                var methodToCall = MethodAccess(
+                    overloadClass.Identifier, methodToCallIdentifier);
+
+                foreach (var graphNode in graph.Nodes)
+                {
+                    if (graphNode.SyntaxCache is not { } syntaxCache)
+                        continue;
+                    if (methodToCallIndex switch
+                        {
+                            0 => syntaxCache.DirectOwnerMethod,
+                            1 => syntaxCache.RootOwnerMethod,
+                            _ => throw new ArgumentOutOfRangeException(nameof(methodToCallIndex))
+                        } is null)
+                    {
+                        continue;
+                    }
+                    if (syntaxCache.RootOwnerMethod is null)
+                        continue;
+                    var branch = genericContext.CreateBranch(
+                        temp, methodToCall, syntaxCache);
+                    statements.Add(branch);
+                }
+
+                // throw new InvalidOperationException();
+                statements.Add(ThrowStatement(ObjectCreationExpression(
+                    IdentifierName("InvalidOperationException"))));
+
+                var method = genericContext.CreateMethod(
+                    temp, methodToCallIdentifier, statements);
+
+                statements.Clear();
+
+                return method;
+            }
+
+            MethodDeclarationSyntax CreateCoerceMethod()
+            {
+                var result = (MethodDeclarationSyntax) ParseMemberDeclaration("""
+                    private static U Coerce<T, U>(T value)
+                    {
+                        if (value is not U u)
+                            // TODO: throw new WrongIdTypeException(expected: typeof(U), actual: typeof(T));
+                            throw new InvalidOperationException();
+
+                        return u;
+                    }
+                """)!;
+                return result;
+            }
         });
+    }
+
+    public static MemberAccessExpressionSyntax MethodAccess(SyntaxToken parent, SyntaxToken methodName)
+    {
+        return MemberAccessExpression(
+            SyntaxKind.SimpleMemberAccessExpression,
+            IdentifierName(parent),
+            IdentifierName(methodName));
+    }
+
+    private static IfStatementSyntax GetBranch(
+        TempArrays temp,
+        MemberAccessExpressionSyntax methodToCall,
+        ParameterSyntax query,
+        ParameterSyntax ownerId,
+        TypeSyntax genericEntityType,
+        TypeSyntax genericOwnerIdType,
+        SyntaxCache syntaxCache)
+    {
+        var typeOfT = TypeOfExpression(genericEntityType);
+        var typeOfEntity = TypeOfExpression(syntaxCache.EntityType);
+        var typeCheck = BinaryExpression(
+            SyntaxKind.EqualsExpression, typeOfT, typeOfEntity);
+
+        var qIdentifier = Identifier("q");
+        VariableDeclarationSyntax qDeclaration;
+        {
+            var qType = syntaxCache.QueryType;
+            // q = (IQueryable<Entity1>) query;
+            var qDeclarator = VariableDeclarator(qIdentifier)
+                .WithInitializer(EqualsValueClause(
+                    CastExpression(qType, IdentifierName(query.Identifier))));
+            // var q = (IQueryable<Entity1>) query;
+            qDeclaration = VariableDeclaration(
+                IdentifierName("var"), SingletonSeparatedList(qDeclarator));
+        }
+
+        var idIdentifier = Identifier("id");
+        VariableDeclarationSyntax idDeclaration;
+        {
+            var coerceTypeArguments = TypeArgumentList(SeparatedList(new[]
+            {
+                genericOwnerIdType,
+                syntaxCache.IdType,
+            }));
+            var coerceCall = InvocationExpression(
+                GenericName(Identifier("Coerce"), coerceTypeArguments),
+                ArgumentList(SingletonSeparatedList(Argument(
+                    IdentifierName(ownerId.Identifier)))));
+            var idDeclarator = VariableDeclarator(idIdentifier)
+                .WithInitializer(EqualsValueClause(coerceCall));
+            idDeclaration = VariableDeclaration(
+                IdentifierName("var"), SingletonSeparatedList(idDeclarator));
+        }
+
+        var qualifiedMethodToCall = methodToCall;
+
+        temp.Arguments[0] = Argument(IdentifierName(qIdentifier));
+        temp.Arguments[1] = Argument(IdentifierName(idIdentifier));
+        var invocation = InvocationExpression(qualifiedMethodToCall)
+            .WithArgumentList(ArgumentList(SeparatedList(temp.Arguments)));
+
+        var returnStatement = ReturnStatement(invocation);
+
+        temp.Statements[0] = LocalDeclarationStatement(qDeclaration);
+        temp.Statements[1] = LocalDeclarationStatement(idDeclaration);
+        temp.Statements[2] = returnStatement;
+        var block = Block(temp.Statements);
+
+        var ifStatement = IfStatement(typeCheck, block);
+        return ifStatement;
+    }
+
+    private static readonly SyntaxTokenList _PublicStatic = TokenList(new[]
+    {
+        Token(SyntaxKind.PublicKeyword),
+        Token(SyntaxKind.StaticKeyword),
+    });
+
+    private static MethodDeclarationSyntax FluentExtensionMethod(
+        SyntaxToken name, ParameterSyntax[] parameters)
+    {
+        var queryable = parameters[0];
+        var method = MethodDeclaration(
+            returnType: queryable.Type!,
+            identifier: name);
+
+        method = method.WithModifiers(_PublicStatic);
+
+        parameters[0] = parameters[0].AddModifiers(Token(SyntaxKind.ThisKeyword));
+        method = method.WithParameterList(ParameterList(SeparatedList(parameters)));
+
+        return method;
+    }
+
+    internal record GenericContext(
+        TypeParameterSyntax EntityTypeParameter,
+        TypeParameterSyntax OwnerIdTypeParameter,
+        TypeSyntax EntityType,
+        TypeSyntax OwnerIdType,
+        ParameterSyntax QueryParameter,
+        ParameterSyntax IdParameter)
+    {
+        public static GenericContext Create()
+        {
+            var genericEntityTypeParameter = TypeParameter(Identifier("T"));
+            var genericEntityType = ParseTypeName(genericEntityTypeParameter.Identifier.Text);
+            var genericOwnerIdTypeParameter = TypeParameter(Identifier("TId"));
+            var genericOwnerIdType = ParseTypeName(genericOwnerIdTypeParameter.Identifier.Text);
+
+            var queryTypeName = GenericName(
+                Identifier("IQueryable"),
+                TypeArgumentList(SingletonSeparatedList(genericEntityType)));
+            var queryParameter = Parameter(Identifier("query"))
+                .WithType(queryTypeName);
+            var idParameter = Parameter(Identifier("ownerId"))
+                .WithType(genericOwnerIdType);
+
+            return new(
+                genericEntityTypeParameter,
+                genericOwnerIdTypeParameter,
+                genericEntityType,
+                genericOwnerIdType,
+                queryParameter,
+                idParameter);
+        }
+
+        public MethodDeclarationSyntax CreateMethod(
+            TempArrays temp,
+            SyntaxToken methodName,
+            IEnumerable<StatementSyntax> statements)
+        {
+            temp.Parameters[0] = QueryParameter;
+            temp.Parameters[1] = IdParameter;
+            var method = FluentExtensionMethod(methodName, temp.Parameters);
+
+            temp.TypeParameters[0] = EntityTypeParameter;
+            temp.TypeParameters[1] = OwnerIdTypeParameter;
+            method = method.WithTypeParameterList(TypeParameterList(SeparatedList(
+                temp.TypeParameters)));
+
+            method = method.WithBody(Block(statements));
+
+            return method;
+        }
+
+        public IfStatementSyntax CreateBranch(
+            TempArrays temp,
+            MemberAccessExpressionSyntax memberToCall,
+            SyntaxCache syntaxCache)
+        {
+            return GetBranch(
+                temp,
+                memberToCall,
+                QueryParameter,
+                IdParameter,
+                EntityType,
+                OwnerIdType,
+                syntaxCache);
+        }
+    }
+
+    internal class TempArrays
+    {
+        public readonly StatementSyntax[] Statements = new StatementSyntax[3];
+        public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
+        public readonly ParameterSyntax[] Parameters = new ParameterSyntax[2];
+        public readonly TypeParameterSyntax[] TypeParameters = new TypeParameterSyntax[2];
     }
 
     private static Graph CreateGraph(Compilation compilation, ImmutableArray<OwnershipEntityTypeInfo> entities)
@@ -337,7 +671,9 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
         ParameterSyntax IdParameter,
         ParameterSyntax QueryParameter)
     {
-        public ParameterListSyntax? MethodParameterList { get; set; }
+        public MethodDeclarationSyntax? DirectOwnerMethod { get; set; }
+        public MethodDeclarationSyntax? RootOwnerMethod { get; set; }
+
         public TypeSyntax QueryType => QueryParameter.Type!;
         public TypeSyntax IdType => IdParameter.Type!;
 
@@ -357,8 +693,7 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
             var idTypeSyntax = ParseTypeName(fullyQualifiedIdPropertyName);
             var queryTypeName = GenericName(
                 Identifier("IQueryable"),
-                TypeArgumentList(
-                    SeparatedList(new[] { entityTypeSyntax })));
+                TypeArgumentList(SingletonSeparatedList(entityTypeSyntax)));
 
             var queryParameter = Parameter(Identifier("query"))
                 .WithType(queryTypeName);
