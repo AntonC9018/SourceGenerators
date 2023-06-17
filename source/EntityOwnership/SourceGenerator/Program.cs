@@ -32,20 +32,6 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
             var graph = CreateGraph(compilation, entities);
 #pragma warning restore CS8620
 
-            static string? GetOwnerIdTypeString(GraphNode graphNode)
-            {
-                if (graphNode.OwnerNode?.Source.Type.Id is { } ownerId)
-                    return ownerId.FullyQualifiedTypeName;
-                else if (graphNode.Source.OwnerType!.Value.Id is { } idToOwner)
-                    return idToOwner.FullyQualifiedTypeName;
-                else if (graphNode.OwnerNode?.IdProperty is { } ownerIdProperty1)
-                    return ownerIdProperty1.ToDisplayString();
-                else if (graphNode.OwnerIdProperty is { } ownerIdProperty2)
-                    return ownerIdProperty2.ToDisplayString();
-                else
-                    return null;
-            }
-
             static MemberAccessExpressionSyntax PropertyAccess(
                 ExpressionSyntax expression,
                 IPropertySymbol property)
@@ -56,7 +42,7 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
                     IdentifierName(property.Name));
             }
 
-            static MemberAccessExpressionSyntax? GetOwnerId(GraphNode graphNode, ExpressionSyntax parent)
+            static MemberAccessExpressionSyntax? GetOwnerIdExpression(GraphNode graphNode, ExpressionSyntax parent)
             {
                 if (graphNode.OwnerIdProperty is not null)
                 {
@@ -79,15 +65,26 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
                 return null;
             }
 
-            var directOwnerFilterMethods = new List<MethodDeclarationSyntax>();
+            foreach (var graphNode in graph.Nodes)
+                graphNode.SyntaxCache = SyntaxCache.Create(graphNode);
+
+            var directOwnerFilterIdentifier = Identifier("DirectOwnerFilter");
+
+            var overloadMethods = new List<MethodDeclarationSyntax>();
+            var tempParams = new ParameterSyntax[2];
+            var tempArguments = new ArgumentSyntax[2];
             foreach (var graphNode in graph.Nodes)
             {
-                if (graphNode.OwnerNode is not {} ownerNode)
-                    continue;
+                var directOwnerFilterMethods = overloadMethods;
 
-                string? ownerIdTypeString = GetOwnerIdTypeString(graphNode);
-                if (ownerIdTypeString is null)
+                if (graphNode is not
+                    {
+                        OwnerNode: { SyntaxCache: {} ownerSyntaxCache } ownerNode,
+                        SyntaxCache: { } syntaxCache,
+                    })
+                {
                     continue;
+                }
 
                 /*
 
@@ -98,18 +95,8 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
 
                  */
 
-                var ownerIdParameter = Parameter(Identifier("ownerId"))
-                    .WithType(ParseTypeName(ownerIdTypeString));
-                var entityTypeSyntax = ParseTypeName(graphNode.Source.Type.FullyQualifiedTypeName);
-                // IQueryable<Entity>
-                var queryTypeName = GenericName(
-                    Identifier("IQueryable"),
-                    TypeArgumentList(
-                        SeparatedList(new[] { entityTypeSyntax })));
-
-
                 var parameter = Parameter(Identifier("e"));
-                ExpressionSyntax? lhsExpression = GetOwnerId(graphNode, IdentifierName(parameter.Identifier));
+                ExpressionSyntax? lhsExpression = GetOwnerIdExpression(graphNode, IdentifierName(parameter.Identifier));
                 if (lhsExpression is null)
                     continue;
 
@@ -119,53 +106,113 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
                     BinaryExpression(
                         SyntaxKind.EqualsExpression,
                         lhsExpression,
-                        IdentifierName(ownerIdParameter.Identifier)));
+                        IdentifierName(ownerSyntaxCache.IdParameter.Identifier)));
 
                 // query.Where(e => e.OwnerId == ownerId)
-                var queryParameter = Parameter(Identifier("query"))
-                    .WithType(queryTypeName);
-                var returnStatement = ReturnStatement(
-                    InvocationExpression(
+                var whereCall = InvocationExpression(
                         MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
-                            IdentifierName(queryParameter.Identifier),
+                            IdentifierName(syntaxCache.QueryParameter.Identifier),
                             IdentifierName("Where")))
                     .WithArgumentList(
                         ArgumentList(
-                            SingletonSeparatedList(
-                                Argument(
-                                    lambda)))));
+                            SingletonSeparatedList(Argument(lambda))));
+
+                // return ...
+                var returnStatement = ReturnStatement(whereCall);
 
                 // IQueryable<Entity> DirectOwnerFilter(IQueryable<Entity> query, ID ownerId)
                 var method = MethodDeclaration(
-                    returnType: queryTypeName,
-                    identifier: Identifier("DirectOwnerFilter"))
-                    .WithParameterList(
-                        ParameterList(
-                            SeparatedList(new[]{ queryParameter, ownerIdParameter })))
+                    returnType: syntaxCache.QueryType,
+                    identifier: directOwnerFilterIdentifier)
+
                     .WithBody(Block(returnStatement));
+
+                tempParams[0] = syntaxCache.QueryParameter;
+                tempParams[1] = ownerSyntaxCache.IdParameter;
+                method = method.WithParameterList(ParameterList(SeparatedList(tempParams)));
 
                 directOwnerFilterMethods.Add(method);
             }
 
-            var rootOwnerFilterMethods = new List<MethodDeclarationSyntax>();
+            var rootOwnerFilterIdentifier = Identifier("RootOwnerFilter");
             foreach (var graphNode in graph.Nodes)
             {
-                if (graphNode.Cycle is not null)
+                var rootOwnerFilterMethods = overloadMethods;
+
+                if (graphNode is not
+                    {
+                        Cycle: null,
+                        OwnerNavigation: { } ownerNavigation,
+                        SyntaxCache: { } syntaxCache,
+                        OwnerNode: {  } ownerNode,
+                        RootOwner: { SyntaxCache: { } rootOwnerCache } rootOwnerNode,
+                    })
+                {
                     continue;
-                if (graphNode.RootOwner is not { } rootOwner)
-                    continue;
+                }
 
-                /*
+                var method = MethodDeclaration(
+                    returnType: syntaxCache.QueryType,
+                    identifier: rootOwnerFilterIdentifier);
 
-                 IQueryable<Entity> RootOwnerFilter(IQueryable<Entity> query, ID ownerId)
-                 {
-                    return query.Where(e => e.Navigation.Navigation.OwnerId == ownerId);
-                 }
+                tempParams[0] = syntaxCache.QueryParameter;
+                tempParams[1] = rootOwnerCache.IdParameter;
+                method = method.WithParameterList(ParameterList(SeparatedList(tempParams)));
 
-                 */
+                if (ReferenceEquals(ownerNode, rootOwnerNode))
+                {
+                    // Just call the root filter:
+                    // return DirectOwnerFilter(query, ownerId);
+                    tempArguments[0] = Argument(IdentifierName(syntaxCache.QueryParameter.Identifier));
+                    tempArguments[1] = Argument(IdentifierName(rootOwnerCache.IdParameter.Identifier));
+                    var invocation = InvocationExpression(IdentifierName(directOwnerFilterIdentifier))
+                        .WithArgumentList(ArgumentList(SeparatedList(tempArguments)));
+                    method = method.WithBody(Block(ReturnStatement(invocation)));
+                }
+                else
+                {
+                    var entityParameter = Parameter(Identifier("e"));
+                    var parentExpression = IdentifierName(entityParameter.Identifier);
+                    var memberAccessChain = PropertyAccess(parentExpression, ownerNavigation);
 
+                    if (!CompleteMemberAccessChain())
+                        continue;
+
+                    bool CompleteMemberAccessChain()
+                    {
+                        GraphNode node = ownerNode;
+                        GraphNode nodeOwner = ownerNode.OwnerNode!;
+
+                        while (true)
+                        {
+                            if (node.OwnerNavigation is not { } ownerOwnerNavigation)
+                                return false;
+                            memberAccessChain = PropertyAccess(memberAccessChain, node.OwnerNavigation);
+
+                            if (nodeOwner.OwnerNode is not { } potentialRoot)
+                                break;
+
+                            node = nodeOwner;
+                            nodeOwner = potentialRoot;
+                        }
+
+                        // nodeOwner is now the root node, so we can reach for the owner id instead of the navigation.
+                        memberAccessChain = GetOwnerIdExpression(nodeOwner, memberAccessChain);
+
+                        return true;
+                    }
+                }
+
+                rootOwnerFilterMethods.Add(method);
             }
+
+            var overloadClass = ((ClassDeclarationSyntax) ParseMemberDeclaration("""
+                    public static partial class EntityOwnershipOverloads{}
+                """)!)
+                .WithMembers(List<MemberDeclarationSyntax>(overloadMethods));
+
+            // Now the switch
 
         });
     }
@@ -286,16 +333,66 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
     }
 
     internal record SyntaxCache(
-        string OwnerIdTypeName,
-        ImmutableArray<ParameterSyntax> Parameters)
+        TypeSyntax EntityType,
+        ParameterSyntax IdParameter,
+        ParameterSyntax QueryParameter)
     {
-        public ParameterSyntax QueryParameter => Parameters[0];
-        public ParameterSyntax OwnerIdParameter => Parameters[1];
+        public ParameterListSyntax? MethodParameterList { get; set; }
         public TypeSyntax QueryType => QueryParameter.Type!;
+        public TypeSyntax IdType => IdParameter.Type!;
 
         public static SyntaxCache? Create(GraphNode node)
         {
+            string fullyQualifiedIdPropertyName;
+            {
+                if (node.Source.Type.Id is { } id)
+                    fullyQualifiedIdPropertyName = id.PropertyName;
+                else if (node.IdProperty is { } idProperty)
+                    fullyQualifiedIdPropertyName = idProperty.Name;
+                else
+                    return null;
+            }
+            string fullyQualifiedTypeName = node.Source.Type.FullyQualifiedTypeName;
+            var entityTypeSyntax = ParseTypeName(fullyQualifiedTypeName);
+            var idTypeSyntax = ParseTypeName(fullyQualifiedIdPropertyName);
+            var queryTypeName = GenericName(
+                Identifier("IQueryable"),
+                TypeArgumentList(
+                    SeparatedList(new[] { entityTypeSyntax })));
 
+            var queryParameter = Parameter(Identifier("query"))
+                .WithType(queryTypeName);
+            var idParameter = Parameter(Identifier("ownerId"))
+                .WithType(idTypeSyntax);
+
+            return new SyntaxCache(entityTypeSyntax, idParameter, queryParameter);
+            //
+            // if (node.OwnerNode is not { } ownerNode)
+            //     return null;
+            //
+            // if (GetOwnerIdTypeName() is not { } ownerIdTypeName)
+            //     return null;
+            // var ownerIdParameter = Parameter(Identifier("ownerId"))
+            //     .WithType(ParseTypeName(ownerIdTypeName));
+            //
+            // var parameters = ImmutableArray.Create(queryParameter, ownerIdParameter);
+            // var parameterList = ParameterList(SeparatedList(parameters));
+            //
+            // return new SyntaxCache(parameters, parameterList);
+            //
+            // string? GetOwnerIdTypeName()
+            // {
+            //     if (ownerNode.Source.Type.Id is { } ownerId)
+            //         return ownerId.FullyQualifiedTypeName;
+            //     else if (node.Source.OwnerType!.Value.Id is { } idToOwner)
+            //         return idToOwner.FullyQualifiedTypeName;
+            //     else if (ownerNode.IdProperty is { } ownerIdProperty1)
+            //         return ownerIdProperty1.ToDisplayString();
+            //     else if (node.OwnerIdProperty is { } ownerIdProperty2)
+            //         return ownerIdProperty2.ToDisplayString();
+            //     else
+            //         return null;
+            // }
         }
     }
 
@@ -322,6 +419,10 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
 
         // If the node is part of a cycle, this property will be set.
         public HashSet<GraphNode>? Cycle { get; set; }
+
+        // Used internally by the syntax generator
+        internal SyntaxCache? SyntaxCache { get; set; }
+        internal TypeSyntax? IdTypeSyntax { get; set; }
 
         public override bool Equals(object? other)
         {
