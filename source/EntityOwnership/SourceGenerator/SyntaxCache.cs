@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -18,25 +17,25 @@ internal record NodeSyntaxCache(
 
     public static NodeSyntaxCache? Create(GraphNode node)
     {
-        string fullyQualifiedIdPropertyName;
+        string fullyQualifiedIdTypeName;
         {
-            if (node.Source.Type.Id is { } id)
-                fullyQualifiedIdPropertyName = id.PropertyName;
-            else if (node.IdProperty is { } idProperty)
-                fullyQualifiedIdPropertyName = idProperty.Name;
+            if (node.IdProperty is { } idProperty)
+                fullyQualifiedIdTypeName = idProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            else if (node.Source.Type.Id is { } id)
+                fullyQualifiedIdTypeName = id.FullyQualifiedTypeName;
             else
                 return null;
         }
         string fullyQualifiedTypeName = node.Source.Type.FullyQualifiedTypeName;
-        var entityTypeSyntax = SyntaxFactory.ParseTypeName(fullyQualifiedTypeName);
-        var idTypeSyntax = SyntaxFactory.ParseTypeName(fullyQualifiedIdPropertyName);
-        var queryTypeName = SyntaxFactory.GenericName(
-            SyntaxFactory.Identifier("IQueryable"),
-            SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(entityTypeSyntax)));
+        var entityTypeSyntax = ParseTypeName(fullyQualifiedTypeName);
+        var idTypeSyntax = ParseTypeName(fullyQualifiedIdTypeName);
+        var queryTypeName = GenericName(
+            Identifier("IQueryable"),
+            TypeArgumentList(SingletonSeparatedList(entityTypeSyntax)));
 
-        var queryParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier("query"))
+        var queryParameter = Parameter(Identifier("query"))
             .WithType(queryTypeName);
-        var idParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier("ownerId"))
+        var idParameter = Parameter(Identifier("ownerId"))
             .WithType(idTypeSyntax);
 
         return new NodeSyntaxCache(entityTypeSyntax, idParameter, queryParameter);
@@ -58,6 +57,8 @@ internal static class StaticSyntaxCache
     // I'm doing this for the sole purpose of writing less strings in the source code.
     public static readonly SyntaxToken DirectOwnerFilterIdentifier = Identifier("DirectOwnerFilter");
     public static readonly SyntaxToken RootOwnerFilterIdentifier = Identifier("RootOwnerFilter");
+    public static readonly SyntaxToken DirectOwnerFilterTIdentifier = Identifier("DirectOwnerFilterT");
+    public static readonly SyntaxToken RootOwnerFilterTIdentifier = Identifier("RootOwnerFilterT");
     public static readonly SyntaxToken OverloadsClassIdentifier = Identifier("EntityOwnershipOverloads");
     public static readonly SyntaxToken GenericMethodsClassIdentifier = Identifier("EntityOwnershipGenericMethods");
 

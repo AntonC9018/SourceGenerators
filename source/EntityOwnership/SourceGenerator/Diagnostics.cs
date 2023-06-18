@@ -4,6 +4,7 @@ namespace EntityOwnership.SourceGenerator;
 
 public static class Diagnostics
 {
+#if false
     public static readonly DiagnosticDescriptor NoOwnerTypeInGraph = new(
         id: "ENTOWN001",
         title: "No owner type in graph",
@@ -12,4 +13,5 @@ public static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "The owner types have to be explicitly annotated.");
+#endif
 }

@@ -1,36 +1,63 @@
-﻿using AutoImplementedProperties.Attributes;
+﻿using EntityOwnership;
 
-public interface IName
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
+public class Company : IOwner
 {
-    public string Name { get; set; }
+    public string Id { get; set; }
 }
 
-public interface IName1
+public class Project : IOwned<Company>
 {
-    public string Name { get; set; }
+    public long Id { get; set; }
+    public string CompanyId { get; set; }
+    public Company Company { get; set; }
 }
 
-public interface ITest : IMeat
+public class Task : IOwned<Project>
 {
-    public int Burger { get; set; }
+    public int Id { get; set; }
+    public long ProjectId { get; set; }
+    public Project Project { get; set; }
 }
 
-public interface IMeat
+partial class Program
 {
-    public int Meat { get; set; }   
-}
+    static void Main()
+    {
+        var companies = new List<Company>
+        {
+            new() { Id = "Hello" },
+            new() { Id = "World" },
+        };
+        var projects = new List<Project>
+        {
+            new() { Id = 1, CompanyId = "Hello" },
+            new() { Id = 2, CompanyId = "World" },
+        };
+        var tasks = new List<Task>
+        {
+            new() { Id = 1, ProjectId = 1 },
+            new() { Id = 2, ProjectId = 1 },
+            new() { Id = 3, ProjectId = 2 },
+        };
 
-public interface IName2
-{
-    public int Name { get; set; }
-}
+        var taskQueryable = tasks.AsQueryable();
+        var projectQueryable = projects.AsQueryable();
+        var companyQueryable = companies.AsQueryable();
 
-#pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+        taskQueryable.DirectOwnerFilter("123"); // expected long, got string
+        taskQueryable.RootOwnerFilter("Hello"); // works fine, filters the companies
 
-[AutoImplementProperties]
-public partial class A : IName, IName1, IName2, ITest 
-{
-    string IName.Name { get; set; }
+        projectQueryable.DirectOwnerFilter(123); // expected string
+        projectQueryable.RootOwnerFilter("Hello"); // works fine, filters the companies
+
+        companyQueryable.DirectOwnerFilter(123); // this overload does not exist for root types
+        companyQueryable.RootOwnerFilter("Hello"); // filters companies themselves.
+
+        EntityOwnershipGenericMethods.RootOwnerFilter(taskQueryable, "Hello"); // works fine, filters the companies
+        EntityOwnershipGenericMethods.RootOwnerFilter(taskQueryable, 123); // compiles, throws an exception at runtime
+    }
 }
 
 #pragma warning restore CS8618

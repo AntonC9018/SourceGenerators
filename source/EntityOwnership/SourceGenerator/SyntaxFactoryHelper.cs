@@ -12,10 +12,10 @@ public static class SyntaxFactoryHelper
         ExpressionSyntax expression,
         IPropertySymbol property)
     {
-        return SyntaxFactory.MemberAccessExpression(
+        return MemberAccessExpression(
             SyntaxKind.SimpleMemberAccessExpression,
             expression,
-            SyntaxFactory.IdentifierName(property.Name));
+            IdentifierName(property.Name));
     }
 
     private static readonly SyntaxTokenList _PublicStaticPartial = TokenList(new[]

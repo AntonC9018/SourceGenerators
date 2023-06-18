@@ -16,6 +16,6 @@ internal static class MemoryMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ref T GetArrayDataReference<T>(T[] array)
     {
-        return ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(array.AsSpan());
+        return ref System.Runtime.InteropServices.MemoryMarshal.GetReference(array.AsSpan());
     }
 }

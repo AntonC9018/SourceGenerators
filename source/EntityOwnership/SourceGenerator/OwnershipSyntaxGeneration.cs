@@ -66,6 +66,9 @@ internal static class OwnershipSyntaxHelper
             .WithUsings(usingList)
             .WithMembers(SingletonList<MemberDeclarationSyntax>(@namespace));
 
+        // Reformat
+        compilationUnit = compilationUnit.NormalizeWhitespace(eol: "\n");
+
         return compilationUnit;
     }
 
@@ -300,8 +303,8 @@ internal static class OwnershipSyntaxHelper
         {
             SyntaxToken methodToCallIdentifier = methodToCallIndex switch
             {
-                0 => StaticSyntaxCache.DirectOwnerFilterIdentifier,
-                1 => StaticSyntaxCache.RootOwnerFilterIdentifier,
+                0 => StaticSyntaxCache.DirectOwnerFilterTIdentifier,
+                1 => StaticSyntaxCache.RootOwnerFilterTIdentifier,
                 _ => throw new ArgumentOutOfRangeException(nameof(methodToCallIndex))
             };
             var methodToCall = MethodAccess(
@@ -329,7 +332,9 @@ internal static class OwnershipSyntaxHelper
 
             // throw new InvalidOperationException();
             statements.Add(ThrowStatement(ObjectCreationExpression(
-                IdentifierName("InvalidOperationException"))));
+                IdentifierName("InvalidOperationException"))
+                // ...()
+                .WithArgumentList(ArgumentList())));
 
             var method = genericContext.CreateMethod(
                 cache, methodToCallIdentifier, statements);
@@ -432,13 +437,15 @@ internal record GenericContext(
                 IdentifierName("var"), SingletonSeparatedList(idDeclarator));
         }
 
-        // return Class.Method(q, id);
+        // return (returnType) Class.Method(q, id);
         syntax.Arguments[0] = Argument(IdentifierName(qIdentifier));
         syntax.Arguments[1] = Argument(IdentifierName(idIdentifier));
         var invocation = InvocationExpression(memberToCall)
             .WithArgumentList(ArgumentList(SeparatedList(syntax.Arguments)));
+        var castToReturnType = CastExpression(
+            QueryParameter.Type!, invocation);
 
-        var returnStatement = ReturnStatement(invocation);
+        var returnStatement = ReturnStatement(castToReturnType);
 
         syntax.Statements[0] = LocalDeclarationStatement(qDeclaration);
         syntax.Statements[1] = LocalDeclarationStatement(idDeclaration);

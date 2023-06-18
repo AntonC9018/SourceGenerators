@@ -34,13 +34,13 @@ internal static class Math
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Min(int val1, int val2)
     {
-        return global::System.Math.Min(val1, val2);
+        return System.Math.Min(val1, val2);
     }
 
     /// <inheritdoc cref="global::System.Math.Max(int, int)"/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Max(int val1, int val2)
     {
-        return global::System.Math.Max(val1, val2);
+        return System.Math.Max(val1, val2);
     }
 }

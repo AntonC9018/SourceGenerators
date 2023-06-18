@@ -74,7 +74,7 @@ internal sealed class ObjectPool<T>
     public ObjectPool(Func<T> factory, int size)
     {
         this.factory = factory;
-        this.items = new Element[size - 1];
+        items = new Element[size - 1];
     }
 
     /// <summary>
@@ -84,9 +84,9 @@ internal sealed class ObjectPool<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Allocate()
     {
-        T? item = this.firstItem;
+        T? item = firstItem;
 
-        if (item is null || item != Interlocked.CompareExchange(ref this.firstItem, null, item))
+        if (item is null || item != Interlocked.CompareExchange(ref firstItem, null, item))
         {
             item = AllocateSlow();
         }
@@ -101,9 +101,9 @@ internal sealed class ObjectPool<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Free(T obj)
     {
-        if (this.firstItem is null)
+        if (firstItem is null)
         {
-            this.firstItem = obj;
+            firstItem = obj;
         }
         else
         {
@@ -118,7 +118,7 @@ internal sealed class ObjectPool<T>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private T AllocateSlow()
     {
-        foreach (ref Element element in this.items.AsSpan())
+        foreach (ref Element element in items.AsSpan())
         {
             T? instance = element.Value;
 
@@ -131,7 +131,7 @@ internal sealed class ObjectPool<T>
             }
         }
 
-        return this.factory();
+        return factory();
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ internal sealed class ObjectPool<T>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void FreeSlow(T obj)
     {
-        foreach (ref Element element in this.items.AsSpan())
+        foreach (ref Element element in items.AsSpan())
         {
             if (element.Value is null)
             {

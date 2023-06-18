@@ -48,7 +48,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     public readonly ReadOnlySpan<T> WrittenSpan
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => this.writer!.WrittenSpan;
+        get => writer!.WrittenSpan;
     }
 
     /// <summary>
@@ -57,13 +57,13 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     public readonly int Count
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => this.writer!.WrittenSpan.Length;
+        get => writer!.WrittenSpan.Length;
     }
 
     /// <inheritdoc cref="ImmutableArray{T}.Builder.Add(T)"/>
     public readonly void Add(T item)
     {
-        this.writer!.Add(item);
+        writer!.Add(item);
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     /// <param name="items">The items to add at the end of the array.</param>
     public readonly void AddRange(ReadOnlySpan<T> items)
     {
-        this.writer!.AddRange(items);
+        writer!.AddRange(items);
     }
 
     /// <summary>
@@ -82,13 +82,13 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     /// <param name="item">The object to insert into the current instance.</param>
     public readonly void Insert(int index, T item)
     {
-        this.writer!.Insert(index, item);
+        writer!.Insert(index, item);
     }
 
     /// <inheritdoc cref="ImmutableArray{T}.Builder.ToImmutable"/>
     public readonly ImmutableArray<T> ToImmutable()
     {
-        T[] array = this.writer!.WrittenSpan.ToArray();
+        T[] array = writer!.WrittenSpan.ToArray();
 
         return Unsafe.As<T[], ImmutableArray<T>>(ref array);
     }
@@ -96,13 +96,13 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     /// <inheritdoc cref="ImmutableArray{T}.Builder.ToArray"/>
     public readonly T[] ToArray()
     {
-        return this.writer!.WrittenSpan.ToArray();
+        return writer!.WrittenSpan.ToArray();
     }
 
     /// <inheritdoc/>
     public override readonly string ToString()
     {
-        return this.writer!.WrittenSpan.ToString();
+        return writer!.WrittenSpan.ToString();
     }
 
     /// <inheritdoc/>
@@ -142,21 +142,21 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         {
             if (typeof(T) == typeof(char))
             {
-                this.array = new T[1024];
+                array = new T[1024];
             }
             else
             {
-                this.array = new T[8];
+                array = new T[8];
             }
 
-            this.index = 0;
+            index = 0;
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.WrittenSpan"/>
         public ReadOnlySpan<T> WrittenSpan
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => new(this.array, 0, this.index);
+            get => new(array, 0, index);
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.Add"/>
@@ -164,7 +164,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         {
             EnsureCapacity(1);
 
-            this.array[this.index++] = value;
+            array[index++] = value;
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.AddRange"/>
@@ -172,9 +172,9 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         {
             EnsureCapacity(items.Length);
 
-            items.CopyTo(this.array.AsSpan(this.index));
+            items.CopyTo(array.AsSpan(index));
 
-            this.index += items.Length;
+            index += items.Length;
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.Insert"/>
@@ -189,10 +189,10 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
 
             if (index < this.index)
             {
-                Array.Copy(this.array, index, this.array, index + 1, this.index - index);
+                Array.Copy(array, index, array, index + 1, this.index - index);
             }
 
-            this.array[index] = item;
+            array[index] = item;
             this.index++;
         }
 
@@ -203,10 +203,10 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         {
             if (typeof(T) != typeof(char))
             {
-                this.array.AsSpan(0, this.index).Clear();
+                array.AsSpan(0, index).Clear();
             }
 
-            this.index = 0;
+            index = 0;
         }
 
         /// <summary>
@@ -216,7 +216,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureCapacity(int requestedSize)
         {
-            if (requestedSize > this.array.Length - this.index)
+            if (requestedSize > array.Length - index)
             {
                 ResizeBuffer(requestedSize);
             }
@@ -229,14 +229,14 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void ResizeBuffer(int sizeHint)
         {
-            int minimumSize = this.index + sizeHint;
-            int requestedSize = Math.Max(this.array.Length * 2, minimumSize);
+            int minimumSize = index + sizeHint;
+            int requestedSize = Math.Max(array.Length * 2, minimumSize);
 
             T[] newArray = new T[requestedSize];
 
-            Array.Copy(this.array, newArray, this.index);
+            Array.Copy(array, newArray, index);
 
-            this.array = newArray;
+            array = newArray;
         }
     }
 }

@@ -15,6 +15,6 @@ internal static class Path
     /// </remarks>
     public static ReadOnlySpan<char> GetExtension(ReadOnlySpan<char> path)
     {
-        return global::System.IO.Path.GetExtension(path.ToString()).AsSpan();
+        return System.IO.Path.GetExtension(path.ToString()).AsSpan();
     }
 }
