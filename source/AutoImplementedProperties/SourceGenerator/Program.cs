@@ -2,12 +2,14 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using ConsumerShared;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NetStandard;
+using SourceGeneration.Extensions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AutoImplementedProperties.SourceGenerator;
@@ -69,8 +71,14 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
 
     private static Info GetInfo(ShouldBeAutogened.TypedGeneratorContext context)
     {
+        var alwaysAutoImplementedAttribute = context.SemanticModel.Compilation.GetTypeByMetadataName(
+            typeof(AlwaysAutoImplemented).FullName!)!;
         var interfaceProperties = context.TargetSymbol
             .AllInterfaces
+            .Where(i => i
+                .GetAttributes()
+                .All(a => a.AttributeClass is { } ac
+                    && !ac.Equals(alwaysAutoImplementedAttribute, SymbolEqualityComparer.Default)))
             .SelectMany(i => i.GetMembers().OfType<IPropertySymbol>())
             .Where(p => p.GetMethod is not null && p.SetMethod is not null);
 
