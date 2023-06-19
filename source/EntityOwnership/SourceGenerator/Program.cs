@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using SourceGeneration.Extensions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
-using static EntityOwnership.SourceGenerator.SyntaxFactoryHelper;
 
 namespace EntityOwnership.SourceGenerator;
 
@@ -21,28 +16,37 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
     {
         var entities = context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => s is ClassDeclarationSyntax,
-                transform: (c, _) => c.GetEntityTypeInfo())
+                transform: static (c, _) => c.GetEntityTypeInfo())
             .Where(r => r is not null);
 
-        var source = context.CompilationProvider.Combine(entities.Collect());
+        var source1 = context.CompilationProvider.Combine(entities.Collect());
+        var source2 = context.AnalyzerConfigOptionsProvider.Combine(source1);
 
-        context.RegisterSourceOutput(source, static (context, source) =>
+        context.RegisterSourceOutput(source2, static (context, source) =>
         {
-            var (compilation, entities) = source;
+            var (analyzerOptions, (compilation, entities)) = source;
 
 #pragma warning disable CS8620 // Wrong nullability. Compiler can't figure out that entities won't have nulls.
             var graph = Graph.Create(compilation, entities);
 #pragma warning restore CS8620
 
-            var compilationRoot = OwnershipSyntaxHelper.GenerateExtensionMethodClasses(graph);
+            var entityOwnership = IdentifierName("EntityOwnership");
+            NameSyntax generatedNamespace;
+            if (analyzerOptions.GlobalOptions.GetRootNamespace() is { } rootNamespaceProp
+                && ParseName(rootNamespaceProp) is { ContainsDiagnostics: false } rootNamespace)
+            {
+                generatedNamespace = QualifiedName(rootNamespace, entityOwnership);
+            }
+            else
+            {
+                generatedNamespace = entityOwnership;
+            }
+
+            var compilationRoot = OwnershipSyntaxHelper.GenerateExtensionMethodClasses(graph, generatedNamespace);
 
             context.AddSource(
                 "EntityOwnershipExtensions.cs",
                 compilationRoot.GetText(Encoding.UTF8));
         });
     }
-
-
-
-
 }

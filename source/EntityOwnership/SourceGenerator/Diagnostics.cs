@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace EntityOwnership.SourceGenerator;
 
 public static class Diagnostics

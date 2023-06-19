@@ -1,4 +1,5 @@
 ﻿using EntityOwnership;
+using EntityOwnership.Sample.EntityOwnership;
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
@@ -21,6 +22,13 @@ public class Task : IOwned<Project>
     public int Id { get; set; }
     public long ProjectId { get; set; }
     public Project Project { get; set; }
+}
+
+public class Task2 : IOwned<Company>
+{
+    public int Id { get; set; }
+    public long CompanyId { get; set; }
+    public Company Company { get; set; }
 }
 
 partial class Program

@@ -35,7 +35,8 @@ internal static class OwnershipSyntaxHelper
         return null;
     }
 
-    public static CompilationUnitSyntax GenerateExtensionMethodClasses(Graph graph)
+    public static CompilationUnitSyntax GenerateExtensionMethodClasses(
+        Graph graph, NameSyntax generatedNamespace)
     {
         foreach (var graphNode in graph.Nodes)
             graphNode.SyntaxCache = NodeSyntaxCache.Create(graphNode);
@@ -62,7 +63,7 @@ internal static class OwnershipSyntaxHelper
         usings.Add(UsingDirective(IdentifierName("System")));
         var usingList = List(usings);
 
-        var @namespace = NamespaceDeclaration(IdentifierName("EntityOwnership"))
+        var @namespace = NamespaceDeclaration(generatedNamespace)
             .WithLeadingTrivia(GeneratedFileHelper.GetTriviaList(nullableEnable: true))
             .WithUsings(usingList);
 
@@ -484,7 +485,7 @@ internal static class OwnershipSyntaxHelper
             }
 
             cache.Statements.Add(ThrowInvalidOperationStatement);
-            var method = genericContext.CreateMethod(cache, Identifier("SomeOwnerFilter"))
+            var method = genericContext.CreateMethod(cache, Identifier("SomeOwnerFilterT"))
                 .TypeParams3();
             return method;
         }

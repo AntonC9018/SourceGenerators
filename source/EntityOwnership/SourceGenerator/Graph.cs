@@ -15,8 +15,16 @@ internal class Graph
     public required List<HashSet<GraphNode>> Cycles { get; init; }
 
 
-    public static Graph Create(Compilation compilation, ImmutableArray<OwnershipEntityTypeInfo> entities)
+    public static Graph Create(
+        Compilation compilation, ImmutableArray<OwnershipEntityTypeInfo> entitiesInput)
     {
+        HashSet<string> foundKeys = new();
+        // Partial types sometimes produce duplicates of the same symbol
+        var entities = entitiesInput.Where(
+                e => foundKeys.Add(e.Type.FullyQualifiedTypeName))
+            // TODO: Remove the memory allocation here.
+            .ToArray();
+
         var mapping = new Dictionary<INamedTypeSymbol, GraphNode>(entities.Length, SymbolEqualityComparer.Default);
         var unlinkedNodes = new GraphNode[entities.Length];
         for (int i = 0; i < entities.Length; i++)
@@ -48,7 +56,7 @@ internal class Graph
                 OwnerIdProperty = ownerIdProperty,
             };
             unlinkedNodes[i] = graphNode;
-            mapping.Add(type, graphNode);
+            mapping.Add(graphNode.Type, graphNode);
         }
 
         // Link nodes to owner nodes.
@@ -56,12 +64,12 @@ internal class Graph
         for (int i = 0; i < entities.Length; i++)
         {
             var graphNode = unlinkedNodes[i];
-            if (graphNode.OwnerType is null)
+            if (graphNode.OwnerType is not {} ownerType)
             {
                 rootOwners.Add(graphNode);
                 continue;
             }
-            if (!mapping.TryGetValue(graphNode.OwnerType, out var ownerGraphNode))
+            if (!mapping.TryGetValue(ownerType, out var ownerGraphNode))
             {
                 // TODO: offer diagnostic, if running in the analyzer.
                 rootOwners.Add(graphNode);

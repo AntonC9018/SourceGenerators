@@ -97,6 +97,17 @@ public static class SyntaxFactoryHelper
         ThrowStatement(
             ObjectCreationExpression(exception)
                 .WithArgumentList(ArgumentList()));
+
+    public static NameSyntax ToNameSyntax(this INamespaceSymbol namespaceSymbol)
+    {
+        var ownNameSyntax = IdentifierName(namespaceSymbol.Name);
+        if (namespaceSymbol.ContainingNamespace is { } ns)
+        {
+            var parentNamespace = ToNameSyntax(ns);
+            return QualifiedName(parentNamespace, ownNameSyntax);
+        }
+        return ownNameSyntax;
+    }
 }
 
 public record struct SingleVariableDeclarationInfo(
