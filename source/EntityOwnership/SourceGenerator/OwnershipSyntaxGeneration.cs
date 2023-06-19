@@ -54,16 +54,18 @@ internal static class OwnershipSyntaxHelper
         var usings = new List<UsingDirectiveSyntax>();
         usings.Add(UsingDirective(IdentifierName("System.Linq.Expressions")));
         usings.Add(UsingDirective(IdentifierName("System.Linq")));
+        usings.Add(UsingDirective(IdentifierName("System")));
         var usingList = List(usings);
+
+        var @namespace = NamespaceDeclaration(IdentifierName("EntityOwnership"))
+            .WithLeadingTrivia(GeneratedFileHelper.GetTriviaList(nullableEnable: true))
+            .WithUsings(usingList);
 
         members.Add(overloadClass);
         members.Add(genericMethodsClass);
-        var @namespace = NamespaceDeclaration(IdentifierName("EntityOwnership"))
-            .WithMembers(List(members));
+        @namespace = @namespace.WithMembers(List(members));
 
         var compilationUnit = CompilationUnit()
-            .WithLeadingTrivia(GeneratedFileHelper.GetTriviaList(nullableEnable: true))
-            .WithUsings(usingList)
             .WithMembers(SingletonList<MemberDeclarationSyntax>(@namespace));
 
         // Reformat
@@ -142,10 +144,10 @@ internal static class OwnershipSyntaxHelper
             // If the node is itself the root, meaning it has no owner,
             // we have to check its own id.
             MethodDeclarationSyntax? method;
-            if (graphNode.OwnerNode is null)
+            if (graphNode.OwnerNode is not { } ownerNode)
                 method = GetMethod_SelfIsRoot(graphNode, syntaxCache);
             else
-                method = GetMethod_RegularOwnerIdChecks(graphNode, syntaxCache);
+                method = GetMethod_RegularOwnerIdChecks(graphNode, ownerNode, syntaxCache);
 
             if (method is null)
                 continue;
@@ -162,7 +164,8 @@ internal static class OwnershipSyntaxHelper
                 return null;
 
             cache.Parameters[1] = syntaxCache.IdParameter;
-            var method = FluentExtensionMethod(StaticSyntaxCache.RootOwnerFilterIdentifier, cache.Parameters);
+            var method = FluentExtensionMethod(
+                StaticSyntaxCache.RootOwnerFilterIdentifier, cache.Parameters);
             // e => e.Id == ownerId
             var parameter = Identifier("e");
             var lambda = EqualsCheckLambda(
@@ -178,6 +181,7 @@ internal static class OwnershipSyntaxHelper
 
         MethodDeclarationSyntax? GetMethod_RegularOwnerIdChecks(
             GraphNode graphNode,
+            GraphNode ownerNode,
             NodeSyntaxCache syntaxCache)
         {
             if (graphNode is not
@@ -190,9 +194,10 @@ internal static class OwnershipSyntaxHelper
             }
 
             cache.Parameters[1] = rootOwnerCache.IdParameter;
-            var method = FluentExtensionMethod(StaticSyntaxCache.RootOwnerFilterIdentifier, cache.Parameters);
+            var method = FluentExtensionMethod(
+                StaticSyntaxCache.RootOwnerFilterIdentifier, cache.Parameters);
 
-            if (ReferenceEquals(graphNode, rootOwnerNode))
+            if (ReferenceEquals(ownerNode, rootOwnerNode))
             {
                 if (syntaxCache.DirectOwnerMethod is not { } directOwnerMethod)
                     return null;
@@ -226,8 +231,8 @@ internal static class OwnershipSyntaxHelper
 
             bool CompleteMemberAccessChain()
             {
-                GraphNode node = graphNode;
-                GraphNode nodeOwner = graphNode.OwnerNode!;
+                GraphNode node = ownerNode;
+                GraphNode nodeOwner = ownerNode.OwnerNode!;
 
                 while (true)
                 {
@@ -235,10 +240,11 @@ internal static class OwnershipSyntaxHelper
                         break;
                     if (node.OwnerNavigation is not { } ownerOwnerNavigation)
                         return false;
-                    memberAccessChain = PropertyAccess(memberAccessChain, ownerOwnerNavigation);
 
                     node = nodeOwner;
                     nodeOwner = potentialRoot;
+
+                    memberAccessChain = PropertyAccess(memberAccessChain, ownerOwnerNavigation);
                 }
 
                 // nodeOwner is now the root node, so we can reach for the owner id instead of the navigation.
@@ -299,13 +305,13 @@ internal static class OwnershipSyntaxHelper
         outResult.Add(CreateSwitchMethod(1));
         outResult.Add(StaticSyntaxCache.CoerceMethod);
 
-        MethodDeclarationSyntax CreateSwitchMethod(int methodToCallIndex)
+        MethodDeclarationSyntax CreateSwitchMethod(int methodIndex)
         {
-            SyntaxToken methodToCallIdentifier = methodToCallIndex switch
+            SyntaxToken methodToCallIdentifier = methodIndex switch
             {
-                0 => StaticSyntaxCache.DirectOwnerFilterTIdentifier,
-                1 => StaticSyntaxCache.RootOwnerFilterTIdentifier,
-                _ => throw new ArgumentOutOfRangeException(nameof(methodToCallIndex))
+                0 => StaticSyntaxCache.DirectOwnerFilterIdentifier,
+                1 => StaticSyntaxCache.RootOwnerFilterIdentifier,
+                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
             };
             var methodToCall = MethodAccess(
                 StaticSyntaxCache.OverloadsClassIdentifier, methodToCallIdentifier);
@@ -314,11 +320,11 @@ internal static class OwnershipSyntaxHelper
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
                     continue;
-                if (methodToCallIndex switch
+                if (methodIndex switch
                     {
                         0 => syntaxCache.DirectOwnerMethod,
                         1 => syntaxCache.RootOwnerMethod,
-                        _ => throw new ArgumentOutOfRangeException(nameof(methodToCallIndex))
+                        _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
                     } is null)
                 {
                     continue;
@@ -336,8 +342,14 @@ internal static class OwnershipSyntaxHelper
                 // ...()
                 .WithArgumentList(ArgumentList())));
 
+            var methodName = methodIndex switch
+            {
+                0 => StaticSyntaxCache.DirectOwnerFilterTIdentifier,
+                1 => StaticSyntaxCache.RootOwnerFilterTIdentifier,
+                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
+            };
             var method = genericContext.CreateMethod(
-                cache, methodToCallIdentifier, statements);
+                cache, methodName, statements);
 
             statements.Clear();
 

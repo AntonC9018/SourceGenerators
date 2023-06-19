@@ -2,6 +2,8 @@
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
+namespace Namespace;
+
 public class Company : IOwner
 {
     public string Id { get; set; }
@@ -55,8 +57,8 @@ partial class Program
         companyQueryable.DirectOwnerFilter(123); // this overload does not exist for root types
         companyQueryable.RootOwnerFilter("Hello"); // filters companies themselves.
 
-        EntityOwnershipGenericMethods.RootOwnerFilter(taskQueryable, "Hello"); // works fine, filters the companies
-        EntityOwnershipGenericMethods.RootOwnerFilter(taskQueryable, 123); // compiles, throws an exception at runtime
+        EntityOwnershipGenericMethods.RootOwnerFilterT(taskQueryable, "Hello"); // works fine, filters the companies
+        EntityOwnershipGenericMethods.RootOwnerFilterT(taskQueryable, 123); // compiles, throws an exception at runtime
     }
 }
 
