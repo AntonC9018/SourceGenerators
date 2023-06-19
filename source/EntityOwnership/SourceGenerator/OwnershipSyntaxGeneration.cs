@@ -393,7 +393,7 @@ internal static class OwnershipSyntaxHelper
                     continue;
                 // var q = (IQueryable<Entity1>) query;
                 var q = genericContext.QDeclaration(syntaxCache);
-                ExpressionSyntax startExpression = IdentifierName(q.Identifier);
+                var startExpression = IdentifierName(syntaxCache.LambdaParameter.Identifier);
                 var typeofGenericOwner = TypeOfExpression(genericContext.OwnerType);
 
                 cache.Statements2.Add(LocalDeclarationStatement(q.Declaration));
@@ -413,7 +413,9 @@ internal static class OwnershipSyntaxHelper
                         idAccess, IdentifierName(id.Identifier));
                     var whereCall = WhereInvocation(
                         IdentifierName(q.Identifier), lambda);
-                    var returnStatement = ReturnStatement(whereCall);
+                    var castedWhereCall = CastExpression(
+                        genericContext.QueryParameter.Type!, whereCall);
+                    var returnStatement = ReturnStatement(castedWhereCall);
 
                     cache.Statements3.Add(LocalDeclarationStatement(id.Declaration));
                     cache.Statements3.Add(returnStatement);
@@ -441,7 +443,7 @@ internal static class OwnershipSyntaxHelper
                 IEnumerable<(GraphNode OwnerNode, ExpressionSyntax IdAccess)> GetIdNavigations(
                     ExpressionSyntax start, GraphNode leaf)
                 {
-                    if (leaf.OwnerIdProperty is { } leafIdProperty)
+                    if (leaf.IdProperty is { } leafIdProperty)
                         yield return (leaf, PropertyAccess(start, leafIdProperty));
                     if (leaf.OwnerNode is not { } ownerNode)
                         yield break;
@@ -473,6 +475,7 @@ internal static class OwnershipSyntaxHelper
 
                         node = ownerNode;
                         ownerNode = nextOwnerNode;
+                        chainToNode = chainToParent;
                     }
 
                     if (node.GetOwnerIdExpression(chainToNode) is { } idAccess)
@@ -480,6 +483,7 @@ internal static class OwnershipSyntaxHelper
                 }
             }
 
+            cache.Statements.Add(ThrowInvalidOperationStatement);
             var method = genericContext.CreateMethod(cache, Identifier("SomeOwnerFilter"))
                 .TypeParams3();
             return method;
@@ -773,8 +777,8 @@ internal record GenericContext(
             SyntaxKind.EqualsExpression, typeOfT, typeOfEntity);
 
         // var q = (IQueryable<Entity1>) query;
-        var (qIdentifier, qDeclaration) = QDeclaration(ownerSyntaxCache);
-        // var id = Coerce<OwnerIdType, IdType>(ownerId);
+        var (qIdentifier, qDeclaration) = QDeclaration(syntaxCache);
+        // var id = Coerce<TId, OwnerIdType>(ownerId);
         var (idIdentifier, idDeclaration) = IdDeclaration(syntax, ownerSyntaxCache);
 
         // return (returnType) Class.Method(q, id);
@@ -817,7 +821,7 @@ internal record GenericContext(
         NodeSyntaxCache ownerSyntaxCache)
     {
         var idIdentifier = Identifier("id");
-        syntax.TypeArguments[0] = ownerSyntaxCache.EntityType;
+        syntax.TypeArguments[0] = OwnerIdType;
         syntax.TypeArguments[1] = ownerSyntaxCache.IdType;
         var coerceTypeArguments = TypeArgumentList(SeparatedList(syntax.TypeArguments));
         var coerceCall = InvocationExpression(

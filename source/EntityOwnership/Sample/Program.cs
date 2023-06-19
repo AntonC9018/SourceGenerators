@@ -48,13 +48,13 @@ partial class Program
         var projectQueryable = projects.AsQueryable();
         var companyQueryable = companies.AsQueryable();
 
-        taskQueryable.DirectOwnerFilter("123"); // expected long, got string
+        // taskQueryable.DirectOwnerFilter("123"); // expected long, got string
         taskQueryable.RootOwnerFilter("Hello"); // works fine, filters the companies
 
-        projectQueryable.DirectOwnerFilter(123); // expected string
+        // projectQueryable.DirectOwnerFilter(123); // expected string
         projectQueryable.RootOwnerFilter("Hello"); // works fine, filters the companies
 
-        companyQueryable.DirectOwnerFilter(123); // this overload does not exist for root types
+        // companyQueryable.DirectOwnerFilter(123); // this overload does not exist for root types
         companyQueryable.RootOwnerFilter("Hello"); // filters companies themselves.
 
         taskQueryable.RootOwnerFilterT("Hello"); // works fine, filters the companies

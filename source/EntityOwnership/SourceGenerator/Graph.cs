@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -133,6 +134,7 @@ internal class Graph
     }
 }
 
+[DebuggerDisplay("{Type}")]
 internal class GraphNode
 {
     public required INamedTypeSymbol Type { get; init; }

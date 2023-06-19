@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -6,6 +7,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace EntityOwnership.SourceGenerator;
 
+[DebuggerDisplay("{EntityType}; {IdType}")]
 internal record NodeSyntaxCache(
     TypeSyntax EntityType,
     ParameterSyntax IdParameter,
@@ -98,7 +100,7 @@ internal static class StaticSyntaxCache
                 return false;
 
             var ownerIdType = GetIdType(ownerType);
-            return Supports{X}OwnerFilter(type) && ownerIdType == idType;
+            return Supports{X}OwnerFilter(entityType) && ownerIdType == idType;
         }
     """;
 
