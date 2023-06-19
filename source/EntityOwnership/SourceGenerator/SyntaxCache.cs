@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -11,6 +13,9 @@ internal record NodeSyntaxCache(
 {
     public MethodDeclarationSyntax? DirectOwnerMethod { get; set; }
     public MethodDeclarationSyntax? RootOwnerMethod { get; set; }
+
+    // entityType == typeof(Entity)
+    public BinaryExpressionSyntax? EntityTypeCheck { get; set; }
 
     public TypeSyntax QueryType => QueryParameter.Type!;
     public TypeSyntax IdType => IdParameter.Type!;
@@ -44,11 +49,11 @@ internal record NodeSyntaxCache(
 
 internal class SyntaxGenerationCache
 {
-    public readonly StatementSyntax[] Statements = new StatementSyntax[3];
     public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
     public readonly ParameterSyntax[] Parameters = new ParameterSyntax[2];
     public readonly TypeParameterSyntax[] TypeParameters = new TypeParameterSyntax[2];
     public readonly TypeSyntax[] TypeArguments = new TypeSyntax[2];
+    public readonly List<StatementSyntax> Statements = new();
 }
 
 internal static class StaticSyntaxCache
@@ -61,6 +66,7 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken RootOwnerFilterTIdentifier = Identifier("RootOwnerFilterT");
     public static readonly SyntaxToken OverloadsClassIdentifier = Identifier("EntityOwnershipOverloads");
     public static readonly SyntaxToken GenericMethodsClassIdentifier = Identifier("EntityOwnershipGenericMethods");
+    public static readonly SyntaxToken HelperClassIdentifier = Identifier("EntityOwnershipHelper");
 
     // I'm sure this one is never cached though.
     public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration("""
@@ -73,4 +79,26 @@ internal static class StaticSyntaxCache
             return u;
         }
     """)!;
+
+    private static readonly string SupportsXOwnerFilter2Method = """
+        public static bool Supports{X}OwnerFilter(Type entityType, Type idType)
+        {
+            var ownerType = Get{X}OwnerType(entityType);
+            if (ownerType is null)
+                return false;
+
+            var ownerIdType = GetIdType(ownerType);
+            return Supports{X}OwnerFilter(type) && ownerIdType == idType;
+        }
+    """;
+
+    // Replace X for Y
+    private static MethodDeclarationSyntax SupportsXOwnerFilter2Syntax(string newX) => (MethodDeclarationSyntax)
+        ParseMemberDeclaration(SupportsXOwnerFilter2Method.Replace("{X}", newX))!;
+
+    public static readonly MethodDeclarationSyntax SupportsRootOwnerFilter2Method =
+        SupportsXOwnerFilter2Syntax("Root");
+    public static readonly MethodDeclarationSyntax SupportsDirectOwnerFilter2Method =
+        SupportsXOwnerFilter2Syntax("Direct");
+
 }

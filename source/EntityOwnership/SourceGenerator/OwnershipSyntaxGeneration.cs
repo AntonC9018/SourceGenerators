@@ -51,6 +51,10 @@ internal static class OwnershipSyntaxHelper
         var genericMethodsClass = ContainerClass(StaticSyntaxCache.GenericMethodsClassIdentifier, members);
         members.Clear();
 
+        AddHelperMethods(graph, cache, members);
+        var helperClass = ContainerClass(StaticSyntaxCache.HelperClassIdentifier, members);
+        members.Clear();
+
         var usings = new List<UsingDirectiveSyntax>();
         usings.Add(UsingDirective(IdentifierName("System.Linq.Expressions")));
         usings.Add(UsingDirective(IdentifierName("System.Linq")));
@@ -63,6 +67,7 @@ internal static class OwnershipSyntaxHelper
 
         members.Add(overloadClass);
         members.Add(genericMethodsClass);
+        members.Add(helperClass);
         @namespace = @namespace.WithMembers(List(members));
 
         var compilationUnit = CompilationUnit()
@@ -356,6 +361,192 @@ internal static class OwnershipSyntaxHelper
             return method;
         }
     }
+
+    /*
+
+
+    public static Type GetIdType(Type entityType)
+    {
+        if (type == typeof(Entity1))
+            return typeof(ID1);
+        if ...
+        throw new InvalidOperationException();
+    }
+
+    public static bool SupportsDirectOwnerFilter(Type type)
+    {
+        if (type == typeof(Entity1))
+            return true;
+        if ...
+        return false;
+    }
+    public static bool SupportsDirectOwnerFilter(Type type, Type idType)
+    {
+        return SupportsOwnerFilter(type) && GetIdType(type) == idType;
+    }
+
+    public static bool SupportsRootOwnerFilter(Type type)
+    {
+        if (type == typeof(Entity1))
+            return true;
+        if ...
+        return false;
+    }
+    public static bool SupportsRootOwnerFilter(Type type, Type idType)
+    {
+        return SupportsRootFilter(type) && GetIdType(type) == idType;
+    }
+
+    */
+    private static void AddHelperMethods(
+        Graph graph,
+        SyntaxGenerationCache cache,
+        List<MemberDeclarationSyntax> outResult)
+    {
+        var typeType = ParseTypeName(typeof(Type).FullName);
+        var nullableTypeType = NullableType(typeType);
+        var entityTypeParameter = Parameter(Identifier("entityType"))
+            .WithType(typeType);
+        var entityTypeParameterAsList = ParameterList(SingletonSeparatedList(entityTypeParameter));
+
+        // Initialize type checks
+        foreach (var graphNode in graph.Nodes)
+        {
+            if (graphNode.SyntaxCache is { } syntaxCache)
+                syntaxCache.EntityTypeCheck = EntityTypeCheck(syntaxCache.EntityType);
+
+            BinaryExpressionSyntax EntityTypeCheck(TypeSyntax otherType)
+            {
+                return BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    IdentifierName(entityTypeParameter.Identifier),
+                    TypeOfExpression(otherType));
+            }
+        }
+
+        outResult.Add(CreateGetTypeIdMethod());
+
+        outResult.Add(CreateGetOwnerTypeMethod(0));
+        outResult.Add(CreateGetOwnerTypeMethod(1));
+
+        AddSupportsMethods(0);
+        AddSupportsMethods(1);
+
+        // GetDirectOwnerType(Type) => Type?
+        // GetRootOwnerType(Type) => Type?
+        MethodDeclarationSyntax CreateGetOwnerTypeMethod(int methodIndex)
+        {
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+                var xOwner = methodIndex switch
+                {
+                    0 => graphNode.OwnerNode,
+                    1 => graphNode.RootOwner,
+                    _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+                };
+                if (xOwner?.SyntaxCache is not { } ownerSyntaxCache)
+                    continue;
+
+                var typeCheck = syntaxCache.EntityTypeCheck!;
+                var returnIdType = ReturnStatement(
+                    TypeOfExpression(ownerSyntaxCache.EntityType));
+                var ifStatement = IfStatement(typeCheck, returnIdType);
+                cache.Statements.Add(ifStatement);
+            }
+
+            var finalStatement = ReturnNull;
+            cache.Statements.Add(finalStatement);
+            var method = MethodDeclaration(
+                    returnType: nullableTypeType,
+                    identifier: methodIndex switch
+                    {
+                        0 => Identifier("GetDirectOwnerType"),
+                        1 => Identifier("GetRootOwnerType"),
+                        _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+                    })
+                .WithModifiers(PublicStatic)
+                .WithParameterList(entityTypeParameterAsList)
+                .WithBody(Block(cache.Statements));
+            cache.Statements.Clear();
+            return method;
+        }
+
+        MethodDeclarationSyntax CreateGetTypeIdMethod()
+        {
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+                var typeCheck = BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    IdentifierName("entityType"),
+                    TypeOfExpression(syntaxCache.EntityType));
+                var returnIdType = ReturnStatement(
+                    TypeOfExpression(syntaxCache.IdType));
+                var ifStatement = IfStatement(typeCheck, returnIdType);
+                cache.Statements.Add(ifStatement);
+            }
+            cache.Statements.Add(ReturnNull);
+
+            var getTypeIdMethod = MethodDeclaration(
+                returnType: nullableTypeType,
+                identifier: Identifier("GetIdType"))
+
+                .WithModifiers(PublicStatic)
+                .WithParameterList(entityTypeParameterAsList)
+                .WithBody(Block(cache.Statements));
+            cache.Statements.Clear();
+
+            return getTypeIdMethod;
+        }
+
+        void AddSupportsMethods(int methodIndex)
+        {
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+                var targetMethod = methodIndex switch
+                {
+                    0 => syntaxCache.DirectOwnerMethod,
+                    1 => syntaxCache.RootOwnerMethod,
+                    _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+                };
+                if (targetMethod is null)
+                    continue;
+
+                var typeCheck = syntaxCache.EntityTypeCheck!;
+                var ifStatement = IfStatement(typeCheck, ReturnTrue);
+                cache.Statements.Add(ifStatement);
+            }
+
+            cache.Statements.Add(ReturnFalse);
+            var supportsMethod = MethodDeclaration(
+                    returnType: PredefinedType(Token(SyntaxKind.BoolKeyword)),
+                    identifier: methodIndex switch
+                    {
+                        0 => Identifier("SupportsDirectOwnerFilter"),
+                        1 => Identifier("SupportsRootOwnerFilter"),
+                        _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+                    })
+                .WithModifiers(PublicStatic)
+                .WithParameterList(entityTypeParameterAsList)
+                .WithBody(Block(cache.Statements));
+            cache.Statements.Clear();
+
+            outResult.Add(supportsMethod);
+
+            var overload2 = methodIndex switch
+            {
+                0 => StaticSyntaxCache.SupportsDirectOwnerFilter2Method,
+                1 => StaticSyntaxCache.SupportsRootOwnerFilter2Method,
+                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
+            };
+            outResult.Add(overload2);
+        }
+    }
 }
 
 internal record GenericContext(
@@ -459,10 +650,11 @@ internal record GenericContext(
 
         var returnStatement = ReturnStatement(castToReturnType);
 
-        syntax.Statements[0] = LocalDeclarationStatement(qDeclaration);
-        syntax.Statements[1] = LocalDeclarationStatement(idDeclaration);
-        syntax.Statements[2] = returnStatement;
+        syntax.Statements.Add(LocalDeclarationStatement(qDeclaration));
+        syntax.Statements.Add(LocalDeclarationStatement(idDeclaration));
+        syntax.Statements.Add(returnStatement);
         var block = Block(syntax.Statements);
+        syntax.Statements.Clear();
 
         var ifStatement = IfStatement(typeCheck, block);
         return ifStatement;

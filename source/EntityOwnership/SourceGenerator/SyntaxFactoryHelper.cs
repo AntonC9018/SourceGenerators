@@ -18,7 +18,7 @@ public static class SyntaxFactoryHelper
             IdentifierName(property.Name));
     }
 
-    private static readonly SyntaxTokenList _PublicStaticPartial = TokenList(new[]
+    public static readonly SyntaxTokenList PublicStaticPartial = TokenList(new[]
     {
         Token(SyntaxKind.PublicKeyword),
         Token(SyntaxKind.StaticKeyword),
@@ -28,7 +28,7 @@ public static class SyntaxFactoryHelper
     public static ClassDeclarationSyntax ContainerClass(SyntaxToken name, IEnumerable<MemberDeclarationSyntax> members)
     {
         return ClassDeclaration(name)
-            .WithModifiers(TokenList(_PublicStaticPartial))
+            .WithModifiers(TokenList(PublicStaticPartial))
             .WithMembers(List(members));
     }
 
@@ -40,7 +40,7 @@ public static class SyntaxFactoryHelper
             IdentifierName(methodName));
     }
 
-    private static readonly SyntaxTokenList _PublicStatic = TokenList(new[]
+    public static readonly SyntaxTokenList PublicStatic = TokenList(new[]
     {
         Token(SyntaxKind.PublicKeyword),
         Token(SyntaxKind.StaticKeyword),
@@ -54,7 +54,7 @@ public static class SyntaxFactoryHelper
             returnType: fluentBuilderType.Type!,
             identifier: name);
 
-        method = method.WithModifiers(_PublicStatic);
+        method = method.WithModifiers(PublicStatic);
 
         parameters[0] = parameters[0].AddModifiers(Token(SyntaxKind.ThisKeyword));
         method = method.WithParameterList(ParameterList(SeparatedList(parameters)));
@@ -84,4 +84,8 @@ public static class SyntaxFactoryHelper
                 ArgumentList(
                     SingletonSeparatedList(Argument(predicate))));
     }
+
+    public static readonly StatementSyntax ReturnTrue = ReturnStatement(LiteralExpression(SyntaxKind.TrueLiteralExpression));
+    public static readonly StatementSyntax ReturnFalse = ReturnStatement(LiteralExpression(SyntaxKind.FalseLiteralExpression));
+    public static readonly StatementSyntax ReturnNull = ReturnStatement(LiteralExpression(SyntaxKind.NullLiteralExpression));
 }

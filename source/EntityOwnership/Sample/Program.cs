@@ -57,8 +57,13 @@ partial class Program
         companyQueryable.DirectOwnerFilter(123); // this overload does not exist for root types
         companyQueryable.RootOwnerFilter("Hello"); // filters companies themselves.
 
-        EntityOwnershipGenericMethods.RootOwnerFilterT(taskQueryable, "Hello"); // works fine, filters the companies
-        EntityOwnershipGenericMethods.RootOwnerFilterT(taskQueryable, 123); // compiles, throws an exception at runtime
+        taskQueryable.RootOwnerFilterT("Hello"); // works fine, filters the companies
+        taskQueryable.RootOwnerFilterT(123); // compiles, throws an exception at runtime
+
+        EntityOwnershipHelper.GetRootOwnerType(typeof(Task)); // returns typeof(Company)
+        EntityOwnershipHelper.GetDirectOwnerType(typeof(Task)); // returns typeof(Project)
+        EntityOwnershipHelper.GetIdType(typeof(Task)); // returns typeof(int)
+        EntityOwnershipHelper.SupportsDirectOwnerFilter(typeof(Task)); // returns true
     }
 }
 
