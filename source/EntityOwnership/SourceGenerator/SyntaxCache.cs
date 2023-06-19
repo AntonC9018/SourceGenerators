@@ -9,7 +9,8 @@ namespace EntityOwnership.SourceGenerator;
 internal record NodeSyntaxCache(
     TypeSyntax EntityType,
     ParameterSyntax IdParameter,
-    ParameterSyntax QueryParameter)
+    ParameterSyntax QueryParameter,
+    ParameterSyntax LambdaParameter)
 {
     public MethodDeclarationSyntax? DirectOwnerMethod { get; set; }
     public MethodDeclarationSyntax? RootOwnerMethod { get; set; }
@@ -43,7 +44,14 @@ internal record NodeSyntaxCache(
         var idParameter = Parameter(Identifier("ownerId"))
             .WithType(idTypeSyntax);
 
-        return new NodeSyntaxCache(entityTypeSyntax, idParameter, queryParameter);
+        // TODO: Maybe name it after the type, or at least the first letter of the type?
+        var lambdaParameter = Parameter(Identifier("e"));
+
+        return new NodeSyntaxCache(
+            entityTypeSyntax,
+            idParameter,
+            queryParameter,
+            lambdaParameter);
     }
 }
 
@@ -51,9 +59,11 @@ internal class SyntaxGenerationCache
 {
     public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
     public readonly ParameterSyntax[] Parameters = new ParameterSyntax[2];
-    public readonly TypeParameterSyntax[] TypeParameters = new TypeParameterSyntax[2];
+    public readonly List<TypeParameterSyntax> TypeParameters = new();
     public readonly TypeSyntax[] TypeArguments = new TypeSyntax[2];
     public readonly List<StatementSyntax> Statements = new();
+    public readonly List<StatementSyntax> Statements2 = new();
+    public readonly List<StatementSyntax> Statements3 = new();
 }
 
 internal static class StaticSyntaxCache

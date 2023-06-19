@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -88,4 +89,15 @@ public static class SyntaxFactoryHelper
     public static readonly StatementSyntax ReturnTrue = ReturnStatement(LiteralExpression(SyntaxKind.TrueLiteralExpression));
     public static readonly StatementSyntax ReturnFalse = ReturnStatement(LiteralExpression(SyntaxKind.FalseLiteralExpression));
     public static readonly StatementSyntax ReturnNull = ReturnStatement(LiteralExpression(SyntaxKind.NullLiteralExpression));
+
+    public static readonly StatementSyntax ThrowInvalidOperationStatement = ThrowNewExceptionStatement(
+            ParseTypeName(typeof(InvalidOperationException).FullName));
+
+    public static StatementSyntax ThrowNewExceptionStatement(TypeSyntax exception) =>
+        ThrowStatement(
+            ObjectCreationExpression(exception)
+                .WithArgumentList(ArgumentList()));
 }
+
+public record struct SingleVariableDeclarationInfo(
+    SyntaxToken Identifier, VariableDeclarationSyntax Declaration);

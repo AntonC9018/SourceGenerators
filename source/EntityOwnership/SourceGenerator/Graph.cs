@@ -114,12 +114,12 @@ internal class Graph
 
             void SetRootOwner(GraphNode node)
             {
-                if (node.RootOwner is not null)
+                if (node.RootOwnerNode is not null)
                     return;
                 if (node.OwnerNode is not { } owner)
                     return;
                 SetRootOwner(owner);
-                node.RootOwner = owner.RootOwner ?? owner;
+                node.RootOwnerNode = owner.RootOwnerNode ?? owner;
             }
         }
 
@@ -142,7 +142,7 @@ internal class GraphNode
     public required IPropertySymbol? OwnerNavigation { get; init; }
     public required IPropertySymbol? OwnerIdProperty { get; init; }
     public GraphNode? OwnerNode { get; set; }
-    public GraphNode? RootOwner { get; set; }
+    public GraphNode? RootOwnerNode { get; set; }
 
     // Can be used internally as a flag.
     public bool HasBeenProcessed { get; set; }
