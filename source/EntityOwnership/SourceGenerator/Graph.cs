@@ -162,7 +162,6 @@ internal class GraphNode
 
     // Used internally by the syntax generator
     internal NodeSyntaxCache? SyntaxCache { get; set; }
-    internal TypeSyntax? IdTypeSyntax { get; set; }
 
     public override bool Equals(object? other)
     {

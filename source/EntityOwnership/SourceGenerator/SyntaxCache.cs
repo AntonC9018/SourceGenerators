@@ -59,7 +59,7 @@ internal record NodeSyntaxCache(
 internal class SyntaxGenerationCache
 {
     public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
-    public readonly ParameterSyntax[] Parameters = new ParameterSyntax[2];
+    public readonly List<ParameterSyntax> Parameters = new(3);
     public readonly List<TypeParameterSyntax> TypeParameters = new();
     public readonly TypeSyntax[] TypeArguments = new TypeSyntax[2];
     public readonly List<StatementSyntax> Statements = new();
@@ -111,5 +111,14 @@ internal static class StaticSyntaxCache
         SupportsXOwnerFilter2Syntax("Root");
     public static readonly MethodDeclarationSyntax SupportsDirectOwnerFilter2Method =
         SupportsXOwnerFilter2Syntax("Direct");
+
+
+    public static readonly MethodDeclarationSyntax SupportsSomeOwnerFilterMethod = (MethodDeclarationSyntax) ParseMemberDeclaration("""
+        public static bool SupportsSomeOwnerFilter(Type entityType, Type ownerType, Type idType)
+        {
+            var ownerIdType = GetIdType(ownerType);
+            return SupportsSomeOwnerFilter(entityType, ownerType) && ownerIdType == idType;
+        }
+    """)!;
 
 }

@@ -48,7 +48,7 @@ public static class SyntaxFactoryHelper
     });
 
     public static MethodDeclarationSyntax FluentExtensionMethod(
-        SyntaxToken name, ParameterSyntax[] parameters)
+        SyntaxToken name, List<ParameterSyntax> parameters)
     {
         var fluentBuilderType = parameters[0];
         var method = MethodDeclaration(
