@@ -817,6 +817,7 @@ internal record GenericContext(
         return new(qIdentifier, qDeclaration);
     }
 
+    // var id = Coerce<TId, OwnerIdType>(ownerId);
     public SingleVariableDeclarationInfo IdDeclaration(
         SyntaxGenerationCache syntax,
         NodeSyntaxCache ownerSyntaxCache)

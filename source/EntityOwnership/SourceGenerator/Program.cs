@@ -26,6 +26,9 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
         {
             var (analyzerOptions, (compilation, entities)) = source;
 
+            if (entities.Length == 0)
+                return;
+
 #pragma warning disable CS8620 // Wrong nullability. Compiler can't figure out that entities won't have nulls.
             var graph = Graph.Create(compilation, entities);
 #pragma warning restore CS8620
