@@ -27,7 +27,7 @@ public class Task : IOwned<Project>
 public class Task2 : IOwned<Company>
 {
     public int Id { get; set; }
-    public long CompanyId { get; set; }
+    public string CompanyId { get; set; }
     public Company Company { get; set; }
 }
 
@@ -72,6 +72,16 @@ partial class Program
         EntityOwnershipHelper.GetDirectOwnerType(typeof(Task)); // returns typeof(Project)
         EntityOwnershipHelper.GetIdType(typeof(Task)); // returns typeof(int)
         EntityOwnershipHelper.SupportsDirectOwnerFilter(typeof(Task)); // returns true
+
+        // Filtering for some specific owner type.
+        // E.g. for tasks you can filter by project and by company.
+        if (EntityOwnershipHelper.SupportsSomeOwnerFilter(
+                typeof(Task), typeof(Project), typeof(long)))
+        {
+            // Since this is to be used in generic contexts, the type arguments are explicit.
+            // It doesn't really make sense in concrete contexts (you can just specify the path manually).
+            taskQueryable.SomeOwnerFilterT<Task, Project, long>(42L);
+        }
     }
 }
 
