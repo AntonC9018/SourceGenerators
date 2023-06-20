@@ -14,12 +14,13 @@ I've been thinking quite a lot about how to make the generated graph contain ent
 
 - Simply caring about the immediate owner is not enough. For example, let's say we have types:
     ```mermaid
-    flowchart TB
+    flowchart LR
         subgraph ProjectA
-        Company-->Project
+        Project-->Company
         end
-        subgraph ProjectB
         Task-->Project
+        subgraph ProjectB
+        Task
         end
     ```
     If I go that route, and now change e.g. the Company's id type, the generated code from ProjectB
