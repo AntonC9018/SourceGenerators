@@ -5,7 +5,7 @@ namespace EntityOwnership;
 /// <summary>
 /// </summary>
 [AlwaysAutoImplemented]
-public interface IOwned<T>
+public interface IOwnedBy<T>
 {
 }
 

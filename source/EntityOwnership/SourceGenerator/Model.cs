@@ -36,7 +36,7 @@ public static class OwnershipModelHelper
         var classDeclaration = (ClassDeclarationSyntax) context.Node;
         var classSymbol = (INamedTypeSymbol) context.SemanticModel.GetDeclaredSymbol(classDeclaration)!;
 
-        var iownedInterface = compilation.GetTypeByMetadataName(typeof(IOwned<>).FullName);
+        var iownedInterface = compilation.GetTypeByMetadataName(typeof(IOwnedBy<>).FullName);
         var iownedImplementation = classSymbol.AllInterfaces
             .FirstOrDefault(i => i.ConstructedFrom.Equals(iownedInterface, SymbolEqualityComparer.Default));
 
