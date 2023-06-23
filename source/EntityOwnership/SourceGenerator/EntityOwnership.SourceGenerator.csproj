@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\Shared\Include.targets" />
   <Import Project="..\..\Utils.Shared\Include.targets" />
+  
   <ItemGroup>
-    <Compile Include="..\..\SourceGeneration\Extensions\AnalyzerConfigOptionsExtensions.cs">
-      <Link>Extensions\AnalyzerConfigOptionsExtensions.cs</Link>
-    </Compile>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 </Project>
