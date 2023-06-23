@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis;
@@ -45,8 +47,8 @@ internal record NodeSyntaxCache(
         var idParameter = Parameter(Identifier("ownerId"))
             .WithType(idTypeSyntax);
 
-        // TODO: Maybe name it after the type, or at least the first letter of the type?
-        var lambdaParameter = Parameter(Identifier("e"));
+        var firstLetter = node.Type.Name[..1].ToLowerInvariant();
+        var lambdaParameter = Parameter(Identifier(firstLetter));
 
         return new NodeSyntaxCache(
             entityTypeSyntax,
@@ -56,15 +58,55 @@ internal record NodeSyntaxCache(
     }
 }
 
+public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
+{
+    public bool IsInUse { get; set; }
+    public List<T> List { get; } = new();
+    public void Dispose()
+    {
+        List.Clear();
+        IsInUse = false;
+    }
+    public BorrowableList<T> Borrow()
+    {
+        static void Throw()
+        {
+            throw new InvalidOperationException("Cannot borrow a list that is already in use.");
+        }
+
+        if (IsInUse)
+            Throw();
+        IsInUse = true;
+        return this;
+    }
+    public void Add(T item)
+    {
+        static void Throw()
+        {
+            throw new InvalidOperationException(
+                "Cannot add to a list that is not in use. " +
+                "Call Borrow() before adding items to the list.");
+        }
+
+        if (!IsInUse)
+            Throw();
+        List.Add(item);
+    }
+    public IEnumerator<T> GetEnumerator() => List.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    public static implicit operator List<T>(BorrowableList<T> list) => list.List;
+}
+
 internal class SyntaxGenerationCache
 {
     public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
-    public readonly List<ParameterSyntax> Parameters = new(3);
-    public readonly List<TypeParameterSyntax> TypeParameters = new();
     public readonly TypeSyntax[] TypeArguments = new TypeSyntax[2];
-    public readonly List<StatementSyntax> Statements = new();
-    public readonly List<StatementSyntax> Statements2 = new();
-    public readonly List<StatementSyntax> Statements3 = new();
+
+    public readonly BorrowableList<ParameterSyntax> Parameters = new();
+    public readonly BorrowableList<TypeParameterSyntax> TypeParameters = new();
+    public readonly BorrowableList<StatementSyntax> Statements = new();
+    public readonly BorrowableList<StatementSyntax> Statements2 = new();
+    public readonly BorrowableList<StatementSyntax> Statements3 = new();
 }
 
 internal static class StaticSyntaxCache
