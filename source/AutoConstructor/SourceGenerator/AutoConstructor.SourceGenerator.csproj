@@ -1,9 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\Shared\Include.targets" />
   <Import Project="..\..\Utils.Shared\Include.targets" />
-  <ItemGroup>
-    <Compile Include="..\..\SourceGeneration\Helpers\TypeSyntaxReference.cs">
-      <Link>Helpers\TypeSyntaxReference.cs</Link>
-    </Compile>
-  </ItemGroup>
 </Project>
