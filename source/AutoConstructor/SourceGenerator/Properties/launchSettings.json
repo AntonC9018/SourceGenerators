@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Generator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\AutoImplementedProperties.Sample\\AutoImplementedProperties.Sample.csproj"
+    }
+  }
+}
