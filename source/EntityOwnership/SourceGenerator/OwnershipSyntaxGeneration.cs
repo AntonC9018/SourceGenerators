@@ -543,7 +543,7 @@ internal static class OwnershipSyntaxHelper
                 var returnType = NullableType(methodReturnType);
                 var method = MethodDeclaration(
                     returnType: returnType,
-                    identifier: StaticSyntaxCache.GetOwnerIdExpression)
+                    identifier: StaticSyntaxCache.GetOwnerIdExpressionIdentifier)
 
                     .WithTypeParameterList(TypeParameterList(SeparatedList(typeParameters)))
                     .WithModifiers(PublicStatic)
@@ -628,12 +628,14 @@ internal static class OwnershipSyntaxHelper
                 typeParameters.Add(genericContext.OwnerIdTypeParameter);
 
                 using var parameters = cache.Parameters.Borrow();
-                parameters.Add(entityParameter);
+                parameters.Add(entityParameter
+                    // Extension method
+                    .WithModifiers(TokenList(Token(SyntaxKind.ThisKeyword))));
                 parameters.Add(genericContext.IdParameter);
 
                 var method = MethodDeclaration(
                     returnType: PredefinedType(Token(SyntaxKind.BoolKeyword)),
-                    identifier: StaticSyntaxCache.TrySetOwnerIdExpression)
+                    identifier: StaticSyntaxCache.TrySetOwnerIdIdentifier)
 
                     .WithTypeParameterList(TypeParameterList(SeparatedList(typeParameters)))
                     .WithModifiers(PublicStatic)

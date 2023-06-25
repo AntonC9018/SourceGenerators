@@ -134,8 +134,8 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken OverloadsClassIdentifier = Identifier("EntityOwnershipOverloads");
     public static readonly SyntaxToken GenericMethodsClassIdentifier = Identifier("EntityOwnershipGenericMethods");
     public static readonly SyntaxToken HelperClassIdentifier = Identifier("EntityOwnershipHelper");
-    public static readonly SyntaxToken GetOwnerIdExpression = Identifier("GetOwnerIdExpression");
-    public static readonly SyntaxToken TrySetOwnerIdExpression = Identifier("TrySetOwnerIdExpression");
+    public static readonly SyntaxToken GetOwnerIdExpressionIdentifier = Identifier("GetOwnerIdExpression");
+    public static readonly SyntaxToken TrySetOwnerIdIdentifier = Identifier("TrySetOwnerId");
 
     // I'm sure this one is never cached though.
      public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""

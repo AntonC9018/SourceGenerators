@@ -47,6 +47,8 @@ public static class SyntaxFactoryHelper
         Token(SyntaxKind.StaticKeyword),
     });
 
+    private static readonly SyntaxToken[] _ThisKeyword = { Token(SyntaxKind.ThisKeyword) };
+
     public static MethodDeclarationSyntax FluentExtensionMethod(
         SyntaxToken name, List<ParameterSyntax> parameters)
     {
@@ -57,7 +59,7 @@ public static class SyntaxFactoryHelper
 
         method = method.WithModifiers(PublicStatic);
 
-        parameters[0] = parameters[0].AddModifiers(Token(SyntaxKind.ThisKeyword));
+        parameters[0] = parameters[0].AddModifiers(_ThisKeyword);
         method = method.WithParameterList(ParameterList(SeparatedList(parameters)));
 
         return method;
