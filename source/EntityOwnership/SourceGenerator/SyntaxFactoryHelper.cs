@@ -108,6 +108,13 @@ public static class SyntaxFactoryHelper
         }
         return ownNameSyntax;
     }
+
+    public static readonly SyntaxTokenList PrivateStaticReadonly = TokenList(new[]
+    {
+        Token(SyntaxKind.PrivateKeyword),
+        Token(SyntaxKind.StaticKeyword),
+        Token(SyntaxKind.ReadOnlyKeyword),
+    });
 }
 
 public record struct SingleVariableDeclarationInfo(

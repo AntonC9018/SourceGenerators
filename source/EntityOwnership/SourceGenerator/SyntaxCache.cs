@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -13,7 +14,8 @@ internal record NodeSyntaxCache(
     TypeSyntax EntityType,
     ParameterSyntax IdParameter,
     ParameterSyntax QueryParameter,
-    ParameterSyntax LambdaParameter)
+    ParameterSyntax LambdaParameter,
+    string EscapedEntityTypeName)
 {
     public MethodDeclarationSyntax? DirectOwnerMethod { get; set; }
     public MethodDeclarationSyntax? RootOwnerMethod { get; set; }
@@ -23,6 +25,8 @@ internal record NodeSyntaxCache(
 
     public TypeSyntax QueryType => QueryParameter.Type!;
     public TypeSyntax IdType => IdParameter.Type!;
+
+    public List<(GraphNode OwnerNode, string Name)> OwnerIdAccesses { get; } = new();
 
     public static NodeSyntaxCache? Create(GraphNode node)
     {
@@ -50,18 +54,26 @@ internal record NodeSyntaxCache(
         var firstLetter = node.Type.Name[..1].ToLowerInvariant();
         var lambdaParameter = Parameter(Identifier(firstLetter));
 
+        var escapedEntityTypeName = fullyQualifiedTypeName.Replace(".", "_");
+
         return new NodeSyntaxCache(
             entityTypeSyntax,
             idParameter,
             queryParameter,
-            lambdaParameter);
+            lambdaParameter,
+            escapedEntityTypeName);
+    }
+
+    public string GetOwnerIdAccessName(NodeSyntaxCache ownerSyntaxCache)
+    {
+        return $"Id__{EscapedEntityTypeName}__{ownerSyntaxCache.EscapedEntityTypeName}";
     }
 }
 
 public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
 {
-    public bool IsInUse { get; set; }
-    public List<T> List { get; } = new();
+    private bool IsInUse { get; set; }
+    private List<T> List { get; } = new();
     public void Dispose()
     {
         List.Clear();
@@ -99,6 +111,8 @@ public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
 
 internal class SyntaxGenerationCache
 {
+    public static readonly ThreadLocal<SyntaxGenerationCache> Instance = new(() => new SyntaxGenerationCache());
+
     public readonly ArgumentSyntax[] Arguments = new ArgumentSyntax[2];
     public readonly TypeSyntax[] TypeArguments = new TypeSyntax[2];
 
@@ -120,18 +134,18 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken OverloadsClassIdentifier = Identifier("EntityOwnershipOverloads");
     public static readonly SyntaxToken GenericMethodsClassIdentifier = Identifier("EntityOwnershipGenericMethods");
     public static readonly SyntaxToken HelperClassIdentifier = Identifier("EntityOwnershipHelper");
+    public static readonly SyntaxToken GetOwnerIdExpression = Identifier("GetOwnerIdExpression");
+    public static readonly SyntaxToken TrySetOwnerIdExpression = Identifier("TrySetOwnerIdExpression");
 
     // I'm sure this one is never cached though.
-    public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration("""
-        private static U Coerce<T, U>(T value)
-        {
-            if (value is not U u)
-                // TODO: throw new WrongIdTypeException(expected: typeof(U), actual: typeof(T));
-                throw new InvalidOperationException();
-
-            return u;
-        }
-    """)!;
+     public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
+         private static U Coerce<T, U>(T value)
+         {
+             if (value is not U u)
+                 throw new {{typeof(WrongIdTypeException).FullName!}}(expected: typeof(U), actual: typeof(T));
+             return u;
+         }
+     """)!;
 
     private static readonly string SupportsXOwnerFilter2Method = """
         public static bool Supports{X}OwnerFilter(Type entityType, Type idType)
@@ -144,6 +158,7 @@ internal static class StaticSyntaxCache
             return Supports{X}OwnerFilter(entityType) && ownerIdType == idType;
         }
     """;
+
 
     // Replace X for Y
     private static MethodDeclarationSyntax SupportsXOwnerFilter2Syntax(string newX) => (MethodDeclarationSyntax)

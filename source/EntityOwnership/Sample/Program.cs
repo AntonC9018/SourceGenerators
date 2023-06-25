@@ -10,21 +10,21 @@ public class Company : IOwner
     public string Id { get; set; }
 }
 
-public class Project : IOwned<Company>
+public class Project : IOwnedBy<Company>
 {
     public long Id { get; set; }
     public string CompanyId { get; set; }
     public Company Company { get; set; }
 }
 
-public class Task : IOwned<Project>
+public class Task : IOwnedBy<Project>
 {
     public int Id { get; set; }
     public long ProjectId { get; set; }
     public Project Project { get; set; }
 }
 
-public class Task2 : IOwned<Company>
+public class Task2 : IOwnedBy<Company>
 {
     public int Id { get; set; }
     public string CompanyId { get; set; }

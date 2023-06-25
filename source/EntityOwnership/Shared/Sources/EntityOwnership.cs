@@ -1,4 +1,5 @@
-﻿using ConsumerShared;
+﻿using System;
+using ConsumerShared;
 
 namespace EntityOwnership;
 
@@ -15,4 +16,19 @@ public interface IOwnedBy<T>
 [AlwaysAutoImplemented]
 public interface IOwner
 {
+}
+
+
+public sealed class WrongIdTypeException : Exception
+{
+    public Type Expected { get; }
+    public Type Actual { get; }
+
+    public WrongIdTypeException(Type expected, Type actual)
+    {
+        Expected = expected;
+        Actual = actual;
+    }
+
+    public override string Message => $"Expected id type {Expected.Name} but got {Actual.Name}.";
 }
