@@ -142,7 +142,7 @@ internal static class StaticSyntaxCache
          private static U Coerce<T, U>(T value)
          {
              if (value is not U u)
-                 throw new {{typeof(WrongIdTypeException).FullName!}}(expected: typeof(U), actual: typeof(T));
+                 throw new global::{{typeof(WrongIdTypeException).FullName!}}(expected: typeof(U), actual: typeof(T));
              return u;
          }
      """)!;
