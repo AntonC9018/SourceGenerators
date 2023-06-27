@@ -178,4 +178,60 @@ internal static class StaticSyntaxCache
         }
     """)!;
 
+    private static readonly string XOwnerFilterClass = $$"""
+    using System.Linq;
+
+    public sealed class {X}OwnerFilter : I{X}OwnerFilter
+    {
+        private {X}OwnerFilter() {}
+        public static {X}OwnerFilter Instance { get; } = new();
+
+        public bool CanFilter<TEntity, TOwnerId>()
+            where TEntity : class
+        {
+            var entityType = typeof(TEntity);
+            var idType = typeof(TOwnerId);
+            return {{HelperClassIdentifier.ToString()}}.Supports{X}OwnerFilter(entityType, idType);
+        }
+
+        public IQueryable<TEntity> Filter<TEntity, TOwnerId>(IQueryable<TEntity> query, TOwnerId ownerId)
+            where TEntity : class
+        {
+            return {{GenericMethodsClassIdentifier.ToString()}}.{X}OwnerFilterT<TEntity, TOwnerId>(query, ownerId);
+        }
+    }
+    """;
+
+    // Replace X for Y
+    private static string XClassImplementation(string newX) =>
+        XOwnerFilterClass.Replace("{X}", newX);
+    public static readonly string RootOwnerFilterClass =
+        XClassImplementation("Root");
+    public static readonly string DirectOwnerFilterClass =
+        XClassImplementation("Direct");
+
+    public static readonly string SomeOwnerFilterClass = $$"""
+    using System.Linq;
+
+    public sealed class SomeOwnerFilter : ISomeOwnerFilter
+    {
+        private SomeOwnerFilter() {}
+        public static SomeOwnerFilter Instance { get; } = new();
+
+        public bool CanFilter<TEntity, TOwner, TOwnerId>()
+            where TEntity : class
+        {
+            var entityType = typeof(TEntity);
+            var ownerType = typeof(TOwner);
+            var idType = typeof(TOwnerId);
+            return {{HelperClassIdentifier.ToString()}}.SupportsSomeOwnerFilter(entityType, ownerType, idType);
+        }
+
+        public IQueryable<TEntity> Filter<TEntity, TOwner, TOwnerId>(IQueryable<TEntity> query, TOwnerId ownerId)
+            where TEntity : class
+        {
+            return {{GenericMethodsClassIdentifier.ToString()}}.SomeOwnerFilterT<TEntity, TOwner, TOwnerId>(query, ownerId);
+        }
+    }
+    """;
 }

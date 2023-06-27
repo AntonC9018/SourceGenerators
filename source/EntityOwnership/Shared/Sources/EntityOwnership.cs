@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using ConsumerShared;
 
 namespace EntityOwnership;
@@ -17,7 +18,6 @@ public interface IOwnedBy<T>
 public interface IOwner
 {
 }
-
 
 public sealed class WrongIdTypeException : Exception
 {

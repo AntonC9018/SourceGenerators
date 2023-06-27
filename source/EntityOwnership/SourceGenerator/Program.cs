@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using SourceGeneration.Extensions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -50,6 +51,19 @@ public sealed class OwnershipGenerator : IIncrementalGenerator
             context.AddSource(
                 "EntityOwnershipExtensions.cs",
                 compilationRoot.GetText(Encoding.UTF8));
+
+            context.AddSource(
+                "SomeOwnerFilter.cs",
+                $"namespace {generatedNamespace};\r\n\r\n" +
+                SourceText.From(StaticSyntaxCache.SomeOwnerFilterClass, Encoding.UTF8));
+            context.AddSource(
+                "RootOwnerFilter.cs",
+                $"namespace {generatedNamespace};\r\n\r\n" +
+                SourceText.From(StaticSyntaxCache.RootOwnerFilterClass, Encoding.UTF8));
+            context.AddSource(
+                "DirectOwnerFilter.cs",
+                $"namespace {generatedNamespace};\r\n\r\n" +
+                SourceText.From(StaticSyntaxCache.DirectOwnerFilterClass, Encoding.UTF8));
         });
     }
 }
