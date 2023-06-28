@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Linq;
 using System.Linq.Expressions;
+using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -480,10 +484,9 @@ internal static class OwnershipSyntaxHelper
                             syntaxCache.LambdaParameter, idNavigation.IdAccess);
                         var expressionType = UnqualifiedExpressionFunc(
                             cache, syntaxCache.EntityType, ownerSyntaxCache.IdType);
-                        var idAccessMember = FieldDeclaration(
-                                VariableDeclaration(expressionType, SingletonSeparatedList(
-                                    VariableDeclarator(Identifier(idAccessName))
-                                        .WithInitializer(EqualsValueClause(lambda)))))
+                        var variable = VariableDeclarator(Identifier(idAccessName))
+                            .WithInitializer(EqualsValueClause(lambda));
+                        var idAccessMember = FieldDeclaration(SingleVariableDeclaration(expressionType, variable))
                             .WithModifiers(PrivateStaticReadonly);
                         outResult.Add(idAccessMember);
                     }
@@ -785,6 +788,7 @@ internal static class OwnershipSyntaxHelper
 
         AddSupportsSomeOwnerFilterMethods();
 
+        AddDependentTypes();
 
         // GetDirectOwnerType(Type) => Type?
         // GetRootOwnerType(Type) => Type?
@@ -972,6 +976,85 @@ internal static class OwnershipSyntaxHelper
 
             // SupportsSomeOwnerFilter(Type entityType, Type ownerType, Type idType) -> bool
             outResult.Add(StaticSyntaxCache.SupportsSomeOwnerFilterMethod);
+        }
+
+        // ReadOnlyCollection<Type> GetDependentObjects<TOwnerType>()
+        void AddDependentTypes()
+        {
+            var typeParameter = TypeParameter(Identifier("TOwnerType"));
+            var readonlyCollectionType = ParseTypeName(
+                typeof(ReadOnlyCollection<>).Namespace + ".ReadOnlyCollection<Type>");
+
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.Cycle is not null)
+                    continue;
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+
+                var dependentTypesArrayName = syntaxCache.GetDependentTypesArrayName();
+                var dependentNodes = graphNode.GetAllDependentNodesDepthFirst();
+
+                using var typeExpressions = ListHelper.Rent<ExpressionSyntax>();
+                foreach (var node in dependentNodes)
+                {
+                    if (node.SyntaxCache is not { } childSyntaxCache)
+                        continue;
+                    typeExpressions.Add(
+                        TypeOfExpression(childSyntaxCache.EntityType));
+                }
+
+                // new Type[] { typeof(EntityType), ... }
+                var typeArraySyntax = ArrayCreationExpression(
+                    ArrayType(typeType, SingletonList(ArrayRankSpecifier())),
+                    InitializerExpression(
+                        SyntaxKind.ArrayInitializerExpression,
+                        SeparatedList(typeExpressions.Enumerable)));
+
+                // System.Array.AsReadOnly(new Type[] { typeof(EntityType), ... })
+                var asReadOnlyCast = InvocationExpression(
+                    ParseName("System.Array.AsReadOnly"),
+                    ArgumentList(SingletonSeparatedList(Argument(typeArraySyntax))));
+
+                var variableDeclarator = VariableDeclarator(
+                    Identifier(dependentTypesArrayName),
+                    argumentList: null,
+                    initializer: EqualsValueClause(asReadOnlyCast));
+
+                var declaration = FieldDeclaration(
+                        SingleVariableDeclaration(readonlyCollectionType, variableDeclarator))
+                    .WithModifiers(PrivateStaticReadonly);
+                outResult.Add(declaration);
+            }
+
+            using var statements = cache.Statements.Borrow();
+
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.Cycle is not null)
+                    continue;
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+
+                // if (typeof(TOwnerType) == typeof(EntityType))
+                var typeCheck = BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    TypeOfExpression(IdentifierName(typeParameter.Identifier)),
+                    TypeOfExpression(syntaxCache.EntityType));
+                var returnArray = ReturnStatement(IdentifierName(syntaxCache.GetDependentTypesArrayName()));
+                var ifStatement = IfStatement(typeCheck, returnArray);
+                statements.Add(ifStatement);
+            }
+
+            statements.Add(ThrowInvalidOperationStatement);
+
+            var method = MethodDeclaration(
+                    identifier: StaticSyntaxCache.GetDependentTypesIdentifier,
+                    returnType: readonlyCollectionType)
+                .WithBody(Block(statements))
+                .WithModifiers(PublicStatic)
+                .WithTypeParameterList(TypeParameterList(SingletonSeparatedList(typeParameter)));
+            outResult.Add(method);
         }
     }
 }

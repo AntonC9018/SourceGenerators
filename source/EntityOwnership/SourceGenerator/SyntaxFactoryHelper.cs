@@ -117,6 +117,13 @@ public static class SyntaxFactoryHelper
         Token(SyntaxKind.StaticKeyword),
         Token(SyntaxKind.ReadOnlyKeyword),
     });
+
+    public static VariableDeclarationSyntax SingleVariableDeclaration(
+        TypeSyntax type,
+        VariableDeclaratorSyntax declaration)
+    {
+        return VariableDeclaration(type, SingletonSeparatedList(declaration));
+    }
 }
 
 public record struct SingleVariableDeclarationInfo(

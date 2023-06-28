@@ -68,6 +68,11 @@ internal record NodeSyntaxCache(
     {
         return $"Id__{EscapedEntityTypeName}__{ownerSyntaxCache.EscapedEntityTypeName}";
     }
+
+    public string GetDependentTypesArrayName()
+    {
+        return $"DependentTypes__{EscapedEntityTypeName}";
+    }
 }
 
 public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
@@ -136,6 +141,7 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken HelperClassIdentifier = Identifier("EntityOwnershipHelper");
     public static readonly SyntaxToken GetOwnerIdExpressionIdentifier = Identifier("GetOwnerIdExpression");
     public static readonly SyntaxToken TrySetOwnerIdIdentifier = Identifier("TrySetOwnerId");
+    public static readonly SyntaxToken GetDependentTypesIdentifier = Identifier("GetDependentTypes");
 
     // I'm sure this one is never cached though.
      public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
@@ -234,4 +240,5 @@ internal static class StaticSyntaxCache
         }
     }
     """;
+
 }

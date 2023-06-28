@@ -15,7 +15,6 @@ internal class Graph
     public required Dictionary<INamedTypeSymbol, GraphNode> Mapping { get; init; }
     public required List<Diagnostic> Diagnostics { get; init; }
 
-
     public static Graph Create(
         Compilation compilation, ImmutableArray<OwnershipEntityTypeInfo> entitiesInput)
     {
@@ -90,6 +89,7 @@ internal class Graph
                 continue;
             }
             graphNode.OwnerNode = ownerGraphNode;
+            ownerGraphNode.DirectChildren.Add(graphNode);
         }
         var graphNodes = unlinkedNodes;
 
@@ -180,6 +180,8 @@ internal class GraphNode
     public GraphNode? RootOwnerNode { get; set; }
     public bool OwnerNotInGraph => OwnerType is not null && OwnerNode is null;
 
+    public List<GraphNode> DirectChildren { get; } = new();
+
     // Can be used internally as a flag.
     public bool HasBeenProcessed { get; set; }
 
@@ -199,5 +201,24 @@ internal class GraphNode
     public override int GetHashCode()
     {
         return SymbolEqualityComparer.Default.GetHashCode(Type);
+    }
+}
+
+internal static class GraphNodeExtensions
+{
+    public static IEnumerable<GraphNode> GetAllDependentNodesDepthFirst(this GraphNode node)
+    {
+        foreach (var child in node.DirectChildren)
+        {
+            // I'm pretty sure the children can't be part of a cycle,
+            // since it's checked via the owner.
+            Debug.Assert(child.Cycle is null);
+
+            foreach (var descendant in GetAllDependentNodesDepthFirst(child))
+                yield return descendant;
+        }
+
+        foreach (var child in node.DirectChildren)
+            yield return child;
     }
 }
