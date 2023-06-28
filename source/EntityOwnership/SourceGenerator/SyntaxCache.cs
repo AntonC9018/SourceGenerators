@@ -181,7 +181,7 @@ internal static class StaticSyntaxCache
     private static readonly string XOwnerFilterClass = $$"""
     using System.Linq;
 
-    public sealed class {X}OwnerFilter : I{X}OwnerFilter
+    public sealed class {X}OwnerFilter : global::{{typeof(IRootOwnerFilter).Namespace!}}.I{X}OwnerFilter
     {
         private {X}OwnerFilter() {}
         public static {X}OwnerFilter Instance { get; } = new();
@@ -213,7 +213,7 @@ internal static class StaticSyntaxCache
     public static readonly string SomeOwnerFilterClass = $$"""
     using System.Linq;
 
-    public sealed class SomeOwnerFilter : ISomeOwnerFilter
+    public sealed class SomeOwnerFilter : global::{{typeof(ISomeOwnerFilter).FullName!}}
     {
         private SomeOwnerFilter() {}
         public static SomeOwnerFilter Instance { get; } = new();
