@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Linq;
-using System.Linq.Expressions;
 using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -186,6 +183,7 @@ internal static class OwnershipSyntaxHelper
                 parameter,
                 PropertyAccess(IdentifierName(parameter.Identifier), idProperty),
                 IdentifierName(syntaxCache.IdParameter.Identifier));
+            // query.Where(e => e.Id == ownerId)
             var whereInvocation = WhereInvocation(
                 IdentifierName(syntaxCache.QueryParameter.Identifier), lambda);
             var returnStatement = ReturnStatement(whereInvocation);
@@ -232,6 +230,7 @@ internal static class OwnershipSyntaxHelper
             if (!CompleteMemberAccessChain())
                 return null;
 
+            // return query.Where(e => e.Owner...)
             var lambda = EqualsCheckLambda(
                 syntaxCache.LambdaParameter,
                 memberAccessChain,
@@ -337,10 +336,11 @@ internal static class OwnershipSyntaxHelper
         outResult.Add(CreateSwitchMethod(1));
         outResult.Add(CreateSomeOwnerFilterMethod());
         outResult.Add(StaticSyntaxCache.CoerceMethod);
-        AddGetOwnerIdAccesses(outResult);
+        AddGetOwnerIdAccesses();
         outResult.Add(CreateGetOwnerIdMethod());
         outResult.Add(CreateTrySetDirectOwnerIdMethod());
 
+        // "Switch" here is an analogy.
         MethodDeclarationSyntax CreateSwitchMethod(int methodIndex)
         {
             SyntaxToken methodToCallIdentifier = methodIndex switch
@@ -418,12 +418,17 @@ internal static class OwnershipSyntaxHelper
                 {
                     if (ownerNode.SyntaxCache is not { } ownerSyntaxCache)
                         continue;
+
+                    // if (typeof(TOwner) == typeof(Entity1Owner1))
                     var typeCheck = BinaryExpression(
                         SyntaxKind.EqualsExpression,
                         typeofGenericOwner,
                         TypeOfExpression(ownerSyntaxCache.EntityType));
+
+                    // var id = Coerce<TId, int>(ownerId);
                     var id = genericContext.IdDeclaration(cache, ownerSyntaxCache);
 
+                    // return query.Where(e => e.Navigation.OwnerId == id);
                     var lambda = EqualsCheckLambda(
                         syntaxCache.LambdaParameter,
                         idAccess, IdentifierName(id.Identifier));
@@ -445,6 +450,7 @@ internal static class OwnershipSyntaxHelper
                 {
                     statements2.Add(ThrowInvalidOperationStatement);
 
+                    // if (typeof(TEntity) == typeof(Entity1))
                     var typeCheck = BinaryExpression(
                         SyntaxKind.EqualsExpression,
                         TypeOfExpression(genericContext.EntityType),
@@ -456,12 +462,12 @@ internal static class OwnershipSyntaxHelper
             }
 
             statements.Add(ThrowInvalidOperationStatement);
-            var method = genericContext.CreateMethod(cache, Identifier("SomeOwnerFilterT"))
+            var method = genericContext.CreateMethod(cache, StaticSyntaxCache.GenericSomeOwnerFilterIdentifier)
                 .TypeParams3();
             return method;
         }
 
-        void AddGetOwnerIdAccesses(List<MemberDeclarationSyntax> outResult)
+        void AddGetOwnerIdAccesses()
         {
             foreach (var graphNode in graph.Nodes)
             {
@@ -494,6 +500,7 @@ internal static class OwnershipSyntaxHelper
             }
         }
 
+        // GetOwnerId<TEntity, TOwner, TOwnerId>() => (e => e.Navigation.OwnerId)
         MethodDeclarationSyntax CreateGetOwnerIdMethod()
         {
             using var statements = cache.Statements.Borrow();
@@ -512,10 +519,12 @@ internal static class OwnershipSyntaxHelper
                 foreach (var (ownerNode, idAccessName) in syntaxCache.OwnerIdAccesses)
                 {
                     var ownerSyntaxCache = ownerNode.SyntaxCache!;
+                    // if (typeof(TOwner) == typeof(Entity1Owner1))
                     var typeCheck = BinaryExpression(
                         SyntaxKind.EqualsExpression,
                         TypeOfExpression(genericContext.OwnerType),
                         TypeOfExpression(ownerSyntaxCache.EntityType));
+                    // return (...) _CachedExpression;
                     var casted = CastExpression(methodReturnType,
                         CastExpression(IdentifierName("object"), IdentifierName(idAccessName)));
                     var returnStatement = ReturnStatement(casted);
@@ -556,6 +565,7 @@ internal static class OwnershipSyntaxHelper
             }
         }
 
+        // bool TrySetDirectOwnerId(TEntity entity, TOwnerId ownerId) => entity.OwnerId = ownerId;
         MethodDeclarationSyntax CreateTrySetDirectOwnerIdMethod()
         {
             using var statements = cache.Statements.Borrow();
@@ -569,7 +579,7 @@ internal static class OwnershipSyntaxHelper
                 if (graphNode.OwnerNode is not { SyntaxCache: { } ownerSyntaxCache })
                     continue;
 
-                // if (typeof(Entity) == typeof(Entity1)) && typeof(Owner) == typeof(Owner1))
+                // if (typeof(Entity) == typeof(Entity1))
                 var entityTypeCheck = BinaryExpression(
                     SyntaxKind.EqualsExpression,
                     TypeOfExpression(genericContext.EntityType),
@@ -905,13 +915,12 @@ internal static class OwnershipSyntaxHelper
             outResult.Add(overload2);
         }
 
-        // SupportsSomeOwnerFilter(Type entity, Type owner) => bool
+        // SupportsSomeOwnerFilter(Type entity, Type ownerType) => bool
         void AddSupportsSomeOwnerFilterMethods()
         {
             var ownerTypeParameter = Parameter(Identifier("ownerType"))
                 .WithType(typeType);
-            var idTypeParameter = Parameter(Identifier("idType"))
-                .WithType(typeType);
+
             using var statements = cache.Statements.Borrow();
 
             foreach (var graphNode in graph.Nodes)
@@ -1016,6 +1025,7 @@ internal static class OwnershipSyntaxHelper
                     ParseName("System.Array.AsReadOnly"),
                     ArgumentList(SingletonSeparatedList(Argument(typeArraySyntax))));
 
+                // private static readonly ... = AsReadOnly([...]);
                 var variableDeclarator = VariableDeclarator(
                     Identifier(dependentTypesArrayName),
                     argumentList: null,
@@ -1113,7 +1123,8 @@ internal record GenericContext(
             _method = method;
         }
 
-        public readonly MethodDeclarationSyntax TypeParams2()
+        // Method<TEntity, TOwnerId>
+        public MethodDeclarationSyntax TypeParams2()
         {
             using var typeParams = _cache.TypeParameters.Borrow();
             typeParams.Add(_context.EntityTypeParameter);
@@ -1123,7 +1134,8 @@ internal record GenericContext(
             return method;
         }
 
-        public readonly MethodDeclarationSyntax TypeParams3()
+        // Method<TEntity, TOwner, TId>
+        public MethodDeclarationSyntax TypeParams3()
         {
             using var typeParams = _cache.TypeParameters.Borrow();
             typeParams.Add(_context.EntityTypeParameter);

@@ -142,6 +142,7 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken GetOwnerIdExpressionIdentifier = Identifier("GetOwnerIdExpression");
     public static readonly SyntaxToken TrySetOwnerIdIdentifier = Identifier("TrySetOwnerId");
     public static readonly SyntaxToken GetDependentTypesIdentifier = Identifier("GetDependentTypes");
+    public static readonly SyntaxToken GenericSomeOwnerFilterIdentifier = Identifier("SomeOwnerFilterT");
 
     // I'm sure this one is never cached though.
      public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
@@ -164,7 +165,6 @@ internal static class StaticSyntaxCache
             return Supports{X}OwnerFilter(entityType) && ownerIdType == idType;
         }
     """;
-
 
     // Replace X for Y
     private static MethodDeclarationSyntax SupportsXOwnerFilter2Syntax(string newX) => (MethodDeclarationSyntax)
@@ -240,5 +240,4 @@ internal static class StaticSyntaxCache
         }
     }
     """;
-
 }
