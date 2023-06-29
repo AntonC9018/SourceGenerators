@@ -190,9 +190,9 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         using var newParams = ListHelper.Rent<ParameterSyntax>(info.MemberNamesToSet.Length);
         foreach (var p in info.MemberNamesToSet)
         {
-            const string loggerPrefix = "Microsoft.Extensions.Logging.Logger";
-            bool isLogger = p.Type.FullyQualifiedName.StartsWith(loggerPrefix + "<")
-                || p.Type.FullyQualifiedName == loggerPrefix;
+            // NOTE: This is a special case for ILogger<T> and ILogger. Might generalize later.
+            const string loggerPrefix = "global::Microsoft.Extensions.Logging.ILogger";
+            bool isLogger = p.Type.FullyQualifiedName.StartsWith(loggerPrefix);
             var typeSyntax = isLogger
                 ? ParseTypeName($"{loggerPrefix}<{info.Hierarchy.Hierarchy[0].QualifiedName}>")
                 : p.Type.AsSyntax();
