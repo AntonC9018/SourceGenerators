@@ -32,7 +32,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         // Generate the constructors
         context.RegisterSourceOutput(info, static (context, item) =>
         {
-            var compilationUnit = GeneratePartialWithConstructors(item!);
+            var compilationUnit = GeneratePartialWithConstructor(item!);
 
             context.AddSource(
                 item!.Hierarchy.FullyQualifiedMetadataName + ".AutoProps.g.cs",
@@ -181,7 +181,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         };
     }
 
-    private static CompilationUnitSyntax GeneratePartialWithConstructors(Info info)
+    private static CompilationUnitSyntax GeneratePartialWithConstructor(Info info)
     {
         var paramsToPassAlong = info.BaseConstructors is { } constructors
             ? GetBestBaseConstructorParameters(constructors)
@@ -281,20 +281,20 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         return parameters.ToImmutable();
     }
 
-    private static string NormalizeName(string memberName)
+    private static string NormalizeName(string fieldOrPropertyName)
     {
-        if (memberName.Length == 0)
+        if (fieldOrPropertyName.Length == 0)
             return "";
-        if (memberName.StartsWith("_"))
+        if (fieldOrPropertyName.StartsWith("_"))
         {
-            if (memberName.Length == 1)
-                return memberName;
-            memberName = memberName[1..];
+            if (fieldOrPropertyName.Length == 1)
+                return fieldOrPropertyName;
+            fieldOrPropertyName = fieldOrPropertyName[1..];
         }
 
-        if (char.IsUpper(memberName[0]))
-            memberName = char.ToUpper(memberName[0]) + memberName[1..];
+        if (char.IsUpper(fieldOrPropertyName[0]))
+            fieldOrPropertyName = char.ToUpper(fieldOrPropertyName[0]) + fieldOrPropertyName[1..];
 
-        return "@" + memberName;
+        return "@" + fieldOrPropertyName;
     }
 }

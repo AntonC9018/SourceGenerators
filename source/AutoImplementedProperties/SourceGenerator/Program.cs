@@ -15,7 +15,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace AutoImplementedProperties.SourceGenerator;
 
 /// <summary>
-/// A source generator creating constructors for types annotated with <see cref="AutoConstructorAttribute"/>.
+/// A source generator creating properties for types annotated with <see cref="AutoImplementPropertiesAttribute"/>.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
@@ -23,12 +23,11 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        IncrementalValuesProvider<Info> constructorInfo = context.SyntaxProvider
+        IncrementalValuesProvider<Info> propertiesInfo = context.SyntaxProvider
             .ForAutoImplementedAttribute(static (context, _) => GetInfo(context))
             .Where(static info => info.HasPropertiesToImplement);
 
-        // Generate the constructors
-        context.RegisterSourceOutput(constructorInfo, static (context, item) =>
+        context.RegisterSourceOutput(propertiesInfo, static (context, item) =>
         {
             var compilationUnit = GeneratePartialImplementingUnimplementedMembers(item);
             context.AddSource(
