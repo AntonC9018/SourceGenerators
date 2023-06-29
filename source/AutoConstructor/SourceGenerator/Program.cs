@@ -190,9 +190,16 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         using var newParams = ListHelper.Rent<ParameterSyntax>(info.MemberNamesToSet.Length);
         foreach (var p in info.MemberNamesToSet)
         {
+            const string loggerPrefix = "Microsoft.Extensions.Logging.Logger";
+            bool isLogger = p.Type.FullyQualifiedName.StartsWith(loggerPrefix + "<")
+                || p.Type.FullyQualifiedName == loggerPrefix;
+            var typeSyntax = isLogger
+                ? ParseTypeName($"{loggerPrefix}<{info.Hierarchy.Hierarchy[0].QualifiedName}>")
+                : p.Type.AsSyntax();
+
             var normalizedName = NormalizeName(p.Name);
             var parameter = Parameter(Identifier(normalizedName))
-                .WithType(p.Type.AsSyntax());
+                .WithType(typeSyntax);
             newParams.Add(parameter);
         }
 
@@ -200,7 +207,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         for (int i = 0; i < newParams.Count; i++)
         {
             var newParam = newParams[i];
-            // _a = a
+            // this._a = @a
             var assignmentExpression = AssignmentExpression(
                 SyntaxKind.SimpleAssignmentExpression,
                 MemberAccessExpression(

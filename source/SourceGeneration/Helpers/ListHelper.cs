@@ -36,7 +36,7 @@ public static class ListHelper
     }
 }
 
-file static class L<T>
+static file class L<T>
 {
     public static readonly ObjectPool<List<T>> Pool = new(() => new(0));
 }
