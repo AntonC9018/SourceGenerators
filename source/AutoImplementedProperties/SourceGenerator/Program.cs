@@ -40,13 +40,13 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
     {
         public record struct Property
         {
-            public string TypeDisplayName { get; set; }
+            public TypeSyntaxReference Type { get; set; }
             public string Name { get; set; }
         }
         public record struct OverloadedProperty
         {
             public Property Property { get; set; }
-            public string InterfaceNameForExplicitImpl { get; set; }
+            public TypeSyntaxReference InterfaceForExplicitImpl { get; set; }
         }
         public bool HasPropertiesToImplement => PropertiesToImplement.Any()
             || OverloadedPropertiesToImplement.Any();
@@ -54,19 +54,6 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
         public required EquatableArray<OverloadedProperty> OverloadedPropertiesToImplement { get; init; }
         public required HierarchyInfo Hierarchy { get; init; }
     }
-
-    private static readonly SymbolDisplayFormat FullyQualifiedWithNullability =
-        new SymbolDisplayFormat(
-            globalNamespaceStyle:
-                SymbolDisplayGlobalNamespaceStyle.Included,
-            typeQualificationStyle:
-                SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
-            genericsOptions:
-                SymbolDisplayGenericsOptions.IncludeTypeParameters,
-            miscellaneousOptions:
-                SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
-                SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
-                SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     private static Info GetInfo(ShouldBeAutogened.TypedGeneratorContext context)
     {
@@ -119,7 +106,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
                 return new Info.Property
                 {
                     Name = p.Name,
-                    TypeDisplayName = p.Type.ToDisplayString(FullyQualifiedWithNullability),
+                    Type = TypeSyntaxReference.From(p.Type),
                 };
             }
 
@@ -129,8 +116,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
                 var info2 = new Info.OverloadedProperty
                 {
                     Property = info,
-                    InterfaceNameForExplicitImpl = p.ContainingType
-                        .ToDisplayString(FullyQualifiedWithNullability),
+                    InterfaceForExplicitImpl = TypeSyntaxReference.From(p.ContainingType),
                 };
                 return info2;
             }
@@ -174,7 +160,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
 
         PropertyDeclarationSyntax CreateFromInfo(Info.Property p)
         {
-            TypeSyntax type = IdentifierName(p.TypeDisplayName);
+            TypeSyntax type = IdentifierName(p.Type);
             SyntaxToken name = Identifier(p.Name);
             var propertyDeclaration = PropertyDeclaration(type, name)
                 .WithAccessorList(AccessorList(List(new[]
@@ -197,7 +183,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
         foreach (var p in info.OverloadedPropertiesToImplement)
         {
             var explicitInterfaceSpecifier = ExplicitInterfaceSpecifier(
-                IdentifierName(p.InterfaceNameForExplicitImpl));
+                p.InterfaceForExplicitImpl.AsNameSyntax());
             var propertyDeclaration = CreateFromInfo(p.Property)
                 .WithExplicitInterfaceSpecifier(explicitInterfaceSpecifier);
             propertyDeclarations.Add(propertyDeclaration);

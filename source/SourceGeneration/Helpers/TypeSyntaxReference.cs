@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace AutoConstructor.SourceGenerator;
+namespace SourceGeneration.Helpers;
 
 public record struct TypeSyntaxReference(string FullyQualifiedName)
 {
@@ -26,4 +26,5 @@ public record struct TypeSyntaxReference(string FullyQualifiedName)
 
     public static implicit operator string(TypeSyntaxReference d) => d.FullyQualifiedName;
     public readonly TypeSyntax AsSyntax() => SyntaxFactory.ParseTypeName(FullyQualifiedName);
+    public readonly NameSyntax AsNameSyntax() => SyntaxFactory.ParseName(FullyQualifiedName);
 }

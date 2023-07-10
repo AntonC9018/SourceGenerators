@@ -1,8 +1,8 @@
 using System.Linq;
-using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SourceGeneration.Extensions;
+using SourceGeneration.Helpers;
 
 namespace EntityOwnership.SourceGenerator;
 
