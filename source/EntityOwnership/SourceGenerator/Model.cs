@@ -1,4 +1,5 @@
 using System.Linq;
+using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SourceGeneration.Extensions;
@@ -9,18 +10,18 @@ internal record OwnershipEntityTypeInfo
 {
     public record struct IdInfo
     {
-        public required string FullyQualifiedTypeName { get; init; }
+        public required TypeSyntaxReference Type { get; init; }
         public required string PropertyName { get; init; }
     }
     public record struct OwnerInfo
     {
-        public required string FullyQualifiedTypeName { get; init; }
+        public required string TypeMetadataName { get; init; }
         public required IdInfo? Id { get; init; }
         public required string? NavigationPropertyName { get; init; }
     }
     public record struct IdAndTypeInfo
     {
-        public required string FullyQualifiedTypeName { get; init; }
+        public required string TypeMetadataName { get; init; }
         public required IdInfo? Id { get; init; }
     }
 
@@ -51,17 +52,17 @@ public static class OwnershipModelHelper
         {
             const string idPropertyName = "Id";
             var idProperty = classSymbol
-                .GetMembers(idPropertyName)
+                .GetMembersEvenIfUnimplemented(idPropertyName)
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault();
 
             typeInfo = new()
             {
-                FullyQualifiedTypeName = classSymbol.GetFullyQualifiedMetadataName(),
+                TypeMetadataName = classSymbol.GetFullyQualifiedMetadataName(),
                 Id = idProperty is null ? null : new()
                 {
                     PropertyName = idProperty.Name,
-                    FullyQualifiedTypeName = idProperty.Type.GetFullyQualifiedMetadataName(),
+                    Type = TypeSyntaxReference.From(idProperty.Type),
                 },
             };
         }
@@ -70,26 +71,25 @@ public static class OwnershipModelHelper
         if (iownedImplementation is { } impl)
         {
             var ownerType = impl.TypeArguments[0];
-            var ownerTypeFullyQualifiedName = ownerType.GetFullyQualifiedMetadataName();
 
             var navigationPropertyName = ownerType.Name;
             var navigationProperty = classSymbol
-                .GetMembers(navigationPropertyName)
+                .GetMembersEvenIfUnimplemented(navigationPropertyName)
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault(i => i.Type.Equals(ownerType, SymbolEqualityComparer.Default));
 
             var idPropertyName = $"{navigationPropertyName}Id";
             var idProperty = classSymbol
-                .GetMembers(idPropertyName)
+                .GetMembersEvenIfUnimplemented(idPropertyName)
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault();
 
             ownerTypeInfo = new()
             {
-                FullyQualifiedTypeName = ownerTypeFullyQualifiedName,
+                TypeMetadataName = ownerType.GetFullyQualifiedMetadataName(),
                 Id = idProperty is null ? null : new()
                 {
-                    FullyQualifiedTypeName = idProperty.Type.GetFullyQualifiedMetadataName(),
+                    Type = TypeSyntaxReference.From(idProperty.Type),
                     PropertyName = idProperty.Name,
                 },
                 NavigationPropertyName = navigationProperty?.Name,

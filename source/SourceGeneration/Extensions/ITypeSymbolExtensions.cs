@@ -104,4 +104,17 @@ internal static class ITypeSymbolExtensions
         return type.GetSelfAndSubtypes()
             .SelectMany(t => t.GetMembers());
     }
+
+    public static IEnumerable<ISymbol> GetMembersEvenIfUnimplemented(
+        this ITypeSymbol type, string symbolName)
+    {
+        var subTypes = type
+            .GetSelfAndSubtypes()
+            .Concat(type.AllInterfaces);
+        var allMembers = subTypes
+            .SelectMany(t => t.GetMembers(symbolName));
+        var membersWithoutDuplicates = allMembers
+            .Distinct(SymbolEqualityComparer.Default);
+        return membersWithoutDuplicates;
+    }
 }

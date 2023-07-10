@@ -3,10 +3,6 @@
     "Generator": {
       "commandName": "DebugRoslynComponent",
       "targetProject": "..\\Sample\\EntityOwnership.Sample.csproj"
-    },
-    "Test": {
-      "commandName": "DebugRoslynComponent",
-      "targetProject": "D:\\work\\ApolloEstimate.API\\Flowqe.Backend.API.Domain\\Flowqe.Backend.API.Domain.csproj"
     }
   }
 }

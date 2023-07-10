@@ -35,12 +35,13 @@ internal record NodeSyntaxCache(
             if (node.IdProperty is { } idProperty)
                 fullyQualifiedIdTypeName = idProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             else if (node.Source.Type.Id is { } id)
-                fullyQualifiedIdTypeName = id.FullyQualifiedTypeName;
+                fullyQualifiedIdTypeName = id.Type.FullyQualifiedName;
             else
                 return null;
         }
-        string fullyQualifiedTypeName = node.Source.Type.FullyQualifiedTypeName;
-        var entityTypeSyntax = ParseTypeName(fullyQualifiedTypeName);
+        string metadataName = node.Source.Type.TypeMetadataName;
+        // NOTE: parsing the metadata here should be fine, since we only consider concrete types, not generic ones.
+        var entityTypeSyntax = ParseTypeName(metadataName);
         var idTypeSyntax = ParseTypeName(fullyQualifiedIdTypeName);
         var queryTypeName = GenericName(
             Identifier("IQueryable"),
@@ -54,7 +55,7 @@ internal record NodeSyntaxCache(
         var firstLetter = node.Type.Name[..1].ToLowerInvariant();
         var lambdaParameter = Parameter(Identifier(firstLetter));
 
-        var escapedEntityTypeName = fullyQualifiedTypeName.Replace(".", "_");
+        var escapedEntityTypeName = metadataName.Replace(".", "_");
 
         return new NodeSyntaxCache(
             entityTypeSyntax,

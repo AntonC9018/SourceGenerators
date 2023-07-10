@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using SourceGeneration.Extensions;
 
 namespace EntityOwnership.SourceGenerator;
 
@@ -21,7 +22,7 @@ internal class Graph
         HashSet<string> foundKeys = new();
         // Partial types sometimes produce duplicates of the same symbol
         var entities = entitiesInput.Where(
-                e => foundKeys.Add(e.Type.FullyQualifiedTypeName))
+                e => foundKeys.Add(e.Type.TypeMetadataName))
             // TODO: Remove the memory allocation here.
             .ToArray();
 
@@ -30,20 +31,23 @@ internal class Graph
         for (int i = 0; i < entities.Length; i++)
         {
             var entityInfo = entities[i];
-            var type = compilation.GetTypeByMetadataName(entityInfo.Type.FullyQualifiedTypeName)!;
+            var type = compilation.GetTypeByMetadataName(entityInfo.Type.TypeMetadataName)!;
 
             IPropertySymbol? GetPropertyOrNull(string? name)
             {
                 if (name is null)
                     return null;
-                return type.GetMembers(name).OfType<IPropertySymbol>().First();
+                return type
+                    .GetMembersEvenIfUnimplemented(name)
+                    .OfType<IPropertySymbol>()
+                    .First();
             }
 
             var idProperty = GetPropertyOrNull(entityInfo.Type.Id?.PropertyName);
             var ownerNavigationProperty = GetPropertyOrNull(entityInfo.OwnerType?.NavigationPropertyName);
             var ownerIdProperty = GetPropertyOrNull(entityInfo.OwnerType?.Id?.PropertyName);
-            var ownerType = entityInfo.OwnerType?.FullyQualifiedTypeName is { } ownerTypeName
-                ? compilation.GetTypeByMetadataName(ownerTypeName)
+            var ownerType = entityInfo.OwnerType?.TypeMetadataName is { } ownerTypeReference
+                ? compilation.GetTypeByMetadataName(ownerTypeReference)
                 : null;
 
             var graphNode = new GraphNode
