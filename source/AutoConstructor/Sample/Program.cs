@@ -4,10 +4,14 @@ public interface Interface<T, V>
 {
 }
 
-[AutoConstructor]
 public abstract partial class Base<T, U, V>
 {
     private Interface<T, V> _interface;
+
+    public Base(Interface<T, V> @interface)
+    {
+        this._interface = @interface;
+    }
 }
 
 [AutoConstructor]
