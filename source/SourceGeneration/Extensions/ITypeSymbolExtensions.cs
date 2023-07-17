@@ -117,4 +117,16 @@ internal static class ITypeSymbolExtensions
             .Distinct(SymbolEqualityComparer.Default);
         return membersWithoutDuplicates;
     }
+
+    public static IEnumerable<ISymbol> GetMembersEvenIfUnimplemented(this ITypeSymbol type)
+    {
+        var subTypes = type
+            .GetSelfAndSubtypes()
+            .Concat(type.AllInterfaces);
+        var allMembers = subTypes
+            .SelectMany(t => t.GetMembers());
+        var membersWithoutDuplicates = allMembers
+            .Distinct(SymbolEqualityComparer.Default);
+        return membersWithoutDuplicates;
+    }
 }

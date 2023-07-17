@@ -56,6 +56,13 @@ public static class OwnershipModelHelper
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault();
 
+            idProperty ??= classSymbol
+                .GetMembers()
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault(p => p.GetAttributes()
+                    // TODO: This attribute should be moved next to the other metadata things of this sg.
+                    .Any(a => a.AttributeClass?.Name.Contains("CustomId") ?? false));
+
             typeInfo = new()
             {
                 TypeMetadataName = classSymbol.GetFullyQualifiedMetadataName(),
