@@ -53,6 +53,8 @@ public static class OwnershipModelHelper
             const string idPropertyName = "Id";
             var idProperty = classSymbol
                 .GetMembersEvenIfUnimplemented(idPropertyName)
+                .Concat(classSymbol
+                    .GetMembersEvenIfUnimplemented(classSymbol.Name + "Id"))
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault();
 

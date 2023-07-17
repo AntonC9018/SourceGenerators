@@ -26,9 +26,15 @@ public class Task : IOwnedBy<Project>
 
 public class Task2 : IOwnedBy<Company>
 {
-    public int Id { get; set; }
+    // no id
     public string CompanyId { get; set; }
     public Company Company { get; set; }
+}
+
+public class Task3 : IOwnedBy<Task2>
+{
+    public int Task2Id { get; set; }
+    public Task2 Task2 { get; set; }
 }
 
 partial class Program

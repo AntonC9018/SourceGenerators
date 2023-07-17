@@ -12,7 +12,7 @@ namespace EntityOwnership.SourceGenerator;
 [DebuggerDisplay("{EntityType}; {IdType}")]
 internal record NodeSyntaxCache(
     TypeSyntax EntityType,
-    ParameterSyntax IdParameter,
+    ParameterSyntax? IdParameter,
     ParameterSyntax QueryParameter,
     ParameterSyntax LambdaParameter,
     string EscapedEntityTypeName)
@@ -24,33 +24,34 @@ internal record NodeSyntaxCache(
     public BinaryExpressionSyntax? EntityTypeCheck { get; set; }
 
     public TypeSyntax QueryType => QueryParameter.Type!;
-    public TypeSyntax IdType => IdParameter.Type!;
+    public TypeSyntax? IdType => IdParameter?.Type;
 
     public List<(GraphNode OwnerNode, string Name)> OwnerIdAccesses { get; } = new();
 
     public static NodeSyntaxCache? Create(GraphNode node)
     {
-        string fullyQualifiedIdTypeName;
+        string? fullyQualifiedIdTypeName;
         {
             if (node.IdProperty is { } idProperty)
                 fullyQualifiedIdTypeName = idProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             else if (node.Source.Type.Id is { } id)
                 fullyQualifiedIdTypeName = id.Type.FullyQualifiedName;
             else
-                return null;
+                fullyQualifiedIdTypeName = null;
         }
         string metadataName = node.Source.Type.TypeMetadataName;
         // NOTE: parsing the metadata here should be fine, since we only consider concrete types, not generic ones.
         var entityTypeSyntax = ParseTypeName(metadataName);
-        var idTypeSyntax = ParseTypeName(fullyQualifiedIdTypeName);
+        var idTypeSyntax = fullyQualifiedIdTypeName is null ? null : ParseTypeName(fullyQualifiedIdTypeName);
         var queryTypeName = GenericName(
             Identifier("IQueryable"),
             TypeArgumentList(SingletonSeparatedList(entityTypeSyntax)));
 
         var queryParameter = Parameter(Identifier("query"))
             .WithType(queryTypeName);
-        var idParameter = Parameter(Identifier("ownerId"))
-            .WithType(idTypeSyntax);
+        var idParameter = idTypeSyntax is null
+            ? null
+            : Parameter(Identifier("ownerId")).WithType(idTypeSyntax);
 
         var firstLetter = node.Type.Name[..1].ToLowerInvariant();
         var lambdaParameter = Parameter(Identifier(firstLetter));
