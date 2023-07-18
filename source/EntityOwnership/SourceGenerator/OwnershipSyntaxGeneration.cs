@@ -599,7 +599,7 @@ internal static class OwnershipSyntaxHelper
                 // if (typeof(Owner) != typeof(Owner1))
                 //     return false;
                 var ownerTypeCheck = BinaryExpression(
-                    SyntaxKind.EqualsExpression,
+                    SyntaxKind.NotEqualsExpression,
                     TypeOfExpression(genericContext.OwnerType),
                     TypeOfExpression(ownerSyntaxCache.EntityType));
                 var ownerTypeCheckStatement = IfStatement(ownerTypeCheck, ReturnFalse);
