@@ -2,13 +2,13 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using AutoImplementedProperties.Attributes;
 using ConsumerShared;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using NetStandard;
 using SourceGeneration.Extensions;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -98,19 +98,35 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
 
         foreach (var group in propsByName)
         {
-            using var enumerator = group.AsEnumerable().GetEnumerator();
-            Debug.Assert(enumerator.MoveNext());
-
-            Info.Property CreatePropInfo(IPropertySymbol p)
+            IPropertySymbol firstProperty;
+            bool shouldGenerateOverloads = false;
             {
-                return new Info.Property
+                using var enumerator = group.GetEnumerator();
+                Debug.Assert(enumerator.MoveNext());
+                firstProperty = enumerator.Current!;
+                var firstType = firstProperty.Type;
+
+                while (enumerator.MoveNext())
                 {
-                    Name = p.Name,
-                    Type = TypeSyntaxReference.From(p.Type),
-                };
+                    if (enumerator.Current!.Equals(firstType, SymbolEqualityComparer.IncludeNullability))
+                        continue;
+
+                    shouldGenerateOverloads = true;
+                    break;
+                }
             }
 
-            Info.OverloadedProperty CreateOverloadedPropInfo(IPropertySymbol p)
+            static Info.Property CreatePropInfo(IPropertySymbol p)
+            {
+                var info = new Info.Property
+                {
+                    Type = TypeSyntaxReference.From(p.Type),
+                    Name = p.Name,
+                };
+                return info;
+            }
+
+            static Info.OverloadedProperty CreateOverloadedPropInfo(IPropertySymbol p)
             {
                 var info = CreatePropInfo(p);
                 var info2 = new Info.OverloadedProperty
@@ -121,26 +137,18 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
                 return info2;
             }
 
-            var first = enumerator.Current!;
-            if (enumerator.MoveNext() == false)
+            if (shouldGenerateOverloads)
             {
-                var info = CreatePropInfo(first);
-                propertiesToImplement.Add(info);
+                foreach (var p in group)
+                {
+                    var info = CreateOverloadedPropInfo(p);
+                    overloadedPropertiesToImplement.Add(info);
+                }
             }
             else
             {
-
-                {
-                    var info = CreateOverloadedPropInfo(first);
-                    overloadedPropertiesToImplement.Add(info);
-                }
-                do
-                {
-                    var current = enumerator.Current!;
-                    var info = CreateOverloadedPropInfo(current);
-                    overloadedPropertiesToImplement.Add(info);
-                }
-                while (enumerator.MoveNext());
+                var info = CreatePropInfo(firstProperty);
+                propertiesToImplement.Add(info);
             }
         }
 
