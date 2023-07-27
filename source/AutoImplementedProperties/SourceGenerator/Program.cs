@@ -108,7 +108,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
 
                 while (enumerator.MoveNext())
                 {
-                    if (enumerator.Current!.Equals(firstType, SymbolEqualityComparer.IncludeNullability))
+                    if (enumerator.Current!.Type.Equals(firstType, SymbolEqualityComparer.IncludeNullability))
                         continue;
 
                     shouldGenerateOverloads = true;

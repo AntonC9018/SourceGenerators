@@ -17,7 +17,7 @@ public interface ITest : IMeat
 
 public interface IMeat
 {
-    public int Meat { get; set; }   
+    public int Meat { get; set; }
 }
 
 public interface IName2
@@ -28,9 +28,16 @@ public interface IName2
 #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
 
 [AutoImplementProperties]
-public partial class A : IName, IName1, IName2, ITest 
+public partial class A : IName, IName1, IName2, ITest
 {
     string IName.Name { get; set; }
 }
 
 #pragma warning restore CS8618
+
+
+[AutoImplementProperties]
+public partial class B : IName, IName1
+{
+
+}
