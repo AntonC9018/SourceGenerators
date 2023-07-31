@@ -5,9 +5,17 @@ using ConsumerShared;
 namespace EntityOwnership;
 
 /// <summary>
+/// Marker base interface for IOwnedBy
 /// </summary>
 [AlwaysAutoImplemented]
-public interface IOwnedBy<T>
+public interface _Owned
+{
+}
+
+/// <summary>
+/// </summary>
+[AlwaysAutoImplemented]
+public interface IOwnedBy<T> : _Owned
 {
 }
 
