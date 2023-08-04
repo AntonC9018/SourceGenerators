@@ -92,6 +92,8 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
                 continue;
             if (member is not IFieldSymbol field)
                 continue;
+            if (member.IsStatic)
+                continue;
 
             ITypeSymbol type;
             string name;
