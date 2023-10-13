@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+<!--  <PropertyGroup>-->
+<!--    <Configuration>Release</Configuration>-->
+<!--  </PropertyGroup>-->
   <Import Project="..\Shared\Include.targets" />
   <Import Project="..\..\Utils.Shared\Include.targets" />
 </Project>

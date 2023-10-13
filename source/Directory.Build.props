@@ -5,19 +5,41 @@
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
-    
+
     <PropertyGroup Condition="'$(IsSourceGenerator)' == '' and $(MSBuildProjectName.EndsWith('.SourceGenerator'))">
         <IsSourceGenerator>true</IsSourceGenerator>
     </PropertyGroup>
-    
+
     <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
         <TargetFramework>netstandard2.0</TargetFramework>
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
 
         <NoWarn>$(NoWarn);CS1591;CS0649;CS1574</NoWarn>
         <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(IsTests)' == '' and $(MSBuildProjectName.EndsWith('.Tests'))">
+        <IsTests>true</IsTests>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(IsTests)' == 'true'">
+        <TargetFramework>net7.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+
+        <!-- Unit tests don't need public XML docs -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+        <!-- Ignore platform compatibility warnings -->
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+
+        <!-- Missing readonly modifier for readonly struct members (not needed in tests) -->
+        <NoWarn>$(NoWarn);IDE0251</NoWarn>
+
+        <!-- Ignore obsolete warnings (due to APIs pending removal for 3.0) -->
+        <NoWarn>$(NoWarn);CS0618</NoWarn>
     </PropertyGroup>
 
     <!-- Configure PolySharp options -->

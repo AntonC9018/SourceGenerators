@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <ProjectReference Include="..\SourceGenerator\AutoImplementedProperties.SourceGenerator.csproj"/>
+    </ItemGroup>
+</Project>
