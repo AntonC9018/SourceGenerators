@@ -115,7 +115,6 @@ public static class TestHelper
         var assemblyPaths = additionalTypes.Select(t => t.Assembly.Location).Distinct();
         var additionalMetadataReferences = assemblyPaths.Select(a => MetadataReference.CreateFromFile(a));
         var allMetadataReferences = defaultMetadataReferences.Concat(additionalMetadataReferences);
-        foreach (var reference in allMetadataReferences)
-            yield return reference;
+        return allMetadataReferences;
     }
 }
