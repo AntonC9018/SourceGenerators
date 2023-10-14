@@ -172,7 +172,7 @@ internal static class StaticSyntaxCache
     """;
 
     public static readonly MethodDeclarationSyntax SomeOwnerFilterTMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
-        public static IQueryable<TEntity> SomeOwnerFilterT<TEntity, TOwner, TOwnerId>(IQueryable<TEntity> query, TOwnerId ownerId)
+        public static IQueryable<TEntity> SomeOwnerFilterT<TEntity, TOwner, TOwnerId>(this IQueryable<TEntity> query, TOwnerId ownerId)
             where TEntity : class
         {
             var filter = GetSomeOwnerFilterT<TEntity, TOwner, TOwnerId>(ownerId);
