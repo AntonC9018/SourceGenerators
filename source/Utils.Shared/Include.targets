@@ -1,5 +1,5 @@
 <Project>
     <ItemGroup>
-        <Compile Include="$(MSBuildThisFileDirectory)Sources/**/*.cs"></Compile>
+        <Compile Include="$(MSBuildThisFileDirectory)Sources/**/*.cs"/>
     </ItemGroup>
 </Project>
