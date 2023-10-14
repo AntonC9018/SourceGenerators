@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -54,7 +55,8 @@ internal record NodeSyntaxCache(
             : Parameter(Identifier("ownerId")).WithType(idTypeSyntax);
 
         var firstLetter = node.Type.Name[..1].ToLowerInvariant();
-        var lambdaParameter = Parameter(Identifier(firstLetter));
+        var lambdaParameter = Parameter(Identifier(firstLetter))
+            .WithType(entityTypeSyntax);
 
         var escapedEntityTypeName = metadataName.Replace(".", "_");
 
@@ -145,16 +147,17 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken TrySetOwnerIdIdentifier = Identifier("TrySetOwnerId");
     public static readonly SyntaxToken GetDependentTypesIdentifier = Identifier("GetDependentTypes");
     public static readonly SyntaxToken GenericSomeOwnerFilterIdentifier = Identifier("SomeOwnerFilterT");
+    public static readonly SyntaxToken GenericGetSomeOwnerFilterIdentifier = Identifier("GetSomeOwnerFilterT");
 
     // I'm sure this one is never cached though.
-     public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
+    public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
          private static U Coerce<T, U>(T value)
          {
              if (value is not U u)
                  throw new global::{{typeof(WrongIdTypeException).FullName!}}(expected: typeof(U), actual: typeof(T));
              return u;
          }
-     """)!;
+    """)!;
 
     private static readonly string SupportsXOwnerFilter2Method = """
         public static bool Supports{X}OwnerFilter(Type entityType, Type idType)
@@ -167,6 +170,17 @@ internal static class StaticSyntaxCache
             return Supports{X}OwnerFilter(entityType) && ownerIdType == idType;
         }
     """;
+
+    public static readonly MethodDeclarationSyntax SomeOwnerFilterTMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
+        public static IQueryable<TEntity> SomeOwnerFilterT<TEntity, TOwner, TOwnerId>(IQueryable<TEntity> query, TOwnerId ownerId)
+            where TEntity : class
+        {
+            var filter = GetSomeOwnerFilterT<TEntity, TOwner, TOwnerId>(ownerId);
+            if (filter is null)
+                throw new InvalidOperationException();
+            return query.Where(filter);
+        }
+    """)!;
 
     // Replace X for Y
     private static MethodDeclarationSyntax SupportsXOwnerFilter2Syntax(string newX) => (MethodDeclarationSyntax)
@@ -220,6 +234,7 @@ internal static class StaticSyntaxCache
 
     public static readonly string SomeOwnerFilterClass = $$"""
     using System.Linq;
+    using System.Linq.Expressions;
 
     public sealed class SomeOwnerFilter : global::{{typeof(ISomeOwnerFilter).FullName!}}
     {
@@ -239,6 +254,12 @@ internal static class StaticSyntaxCache
             where TEntity : class
         {
             return {{GenericMethodsClassIdentifier.ToString()}}.SomeOwnerFilterT<TEntity, TOwner, TOwnerId>(query, ownerId);
+        }
+
+        public Expression<System.Func<TEntity, bool>>? GetFilter<TEntity, TOwner, TOwnerId>(TOwnerId ownerId)
+            where TEntity : class
+        {
+            return {{GenericMethodsClassIdentifier.ToString()}}.GetSomeOwnerFilterT<TEntity, TOwner, TOwnerId>(ownerId);
         }
     }
     """;

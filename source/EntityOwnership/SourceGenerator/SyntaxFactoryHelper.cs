@@ -66,18 +66,18 @@ public static class SyntaxFactoryHelper
         return method;
     }
 
-    public static SimpleLambdaExpressionSyntax EqualsCheckLambda(
+    public static ParenthesizedLambdaExpressionSyntax EqualsCheckLambda(
         ParameterSyntax parameter,
         ExpressionSyntax lhs,
         ExpressionSyntax rhs)
     {
-        return SimpleLambdaExpression(
-            parameter, BinaryExpression(SyntaxKind.EqualsExpression, lhs, rhs));
+        return ParenthesizedLambdaExpression(BinaryExpression(SyntaxKind.EqualsExpression, lhs, rhs))
+            .WithParameterList(ParameterList(SingletonSeparatedList(parameter)));
     }
 
     public static InvocationExpressionSyntax WhereInvocation(
         ExpressionSyntax parent,
-        SimpleLambdaExpressionSyntax predicate)
+        LambdaExpressionSyntax predicate)
     {
         return InvocationExpression(
                 MemberAccessExpression(
@@ -94,7 +94,7 @@ public static class SyntaxFactoryHelper
     public static readonly StatementSyntax ReturnNull = ReturnStatement(LiteralExpression(SyntaxKind.NullLiteralExpression));
 
     public static readonly StatementSyntax ThrowInvalidOperationStatement = ThrowNewExceptionStatement(
-            ParseTypeName(typeof(InvalidOperationException).FullName));
+            ParseTypeName(typeof(InvalidOperationException).FullName!));
 
     public static StatementSyntax ThrowNewExceptionStatement(TypeSyntax exception) =>
         ThrowStatement(

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq.Expressions;
 using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -336,7 +337,8 @@ internal static class OwnershipSyntaxHelper
         var genericContext = GenericContext.Create();
         outResult.Add(CreateSwitchMethod(0));
         outResult.Add(CreateSwitchMethod(1));
-        outResult.Add(CreateSomeOwnerFilterMethod());
+        outResult.Add(CreateGetSomeOwnerFilterMethod());
+        outResult.Add(StaticSyntaxCache.SomeOwnerFilterTMethod);
         outResult.Add(StaticSyntaxCache.CoerceMethod);
         AddGetOwnerIdAccesses();
         outResult.Add(CreateGetOwnerIdMethod());
@@ -392,15 +394,35 @@ internal static class OwnershipSyntaxHelper
                 _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
             };
 
-            var method = genericContext.CreateMethod(cache, methodName)
+            var method = genericContext.CreateQueryMethod(cache, methodName)
                 .TypeParams2();
 
             return method;
         }
 
-        MethodDeclarationSyntax CreateSomeOwnerFilterMethod()
+        /*
+        Expression<Func<T, bool>>? GetSomeOwnerFilter<T, TOwner, TId>(TId ownerId)
+        {
+            if (typeof(T) == typeof(Entity1))
+            {
+                if (typeof(TOwner) == typeof(Entity1Owner1))
+                    return (e => e.Navigation.OwnerId == ownerId);
+                if (typeof(TOwner) == typeof(Entity1Owner2))
+                    return (e => e.Navigation.OwnerId == ownerId);
+                ...
+            }
+        }
+        */
+        MethodDeclarationSyntax CreateGetSomeOwnerFilterMethod()
         {
             using var statements = cache.Statements.Borrow();
+
+            // Expression<Func<TEntity, bool>>?
+            var resultType = NullableType(
+                UnqualifiedExpressionFunc(
+                    cache,
+                    genericContext.EntityType,
+                    IdentifierName("bool")));
 
             foreach (var graphNode in graph.Nodes)
             {
@@ -408,14 +430,10 @@ internal static class OwnershipSyntaxHelper
                     continue;
                 if (graphNode.Cycle is not null)
                     continue;
-                // var q = (IQueryable<Entity1>) query;
-                var q = genericContext.QDeclaration(syntaxCache);
+
+                using var statements2 = cache.Statements2.Borrow();
                 var startExpression = IdentifierName(syntaxCache.LambdaParameter.Identifier);
                 var typeofGenericOwner = TypeOfExpression(genericContext.OwnerType);
-                using var statements2 = cache.Statements2.Borrow();
-
-                statements2.Add(LocalDeclarationStatement(q.Declaration));
-
                 foreach (var (ownerNode, idAccess) in GetIdNavigations(startExpression, graphNode))
                 {
                     if (ownerNode.SyntaxCache is not { IdType: { } ownerIdType } ownerSyntaxCache)
@@ -430,27 +448,41 @@ internal static class OwnershipSyntaxHelper
                     // var id = Coerce<TId, int>(ownerId);
                     var id = genericContext.IdDeclaration(cache, ownerIdType);
 
-                    // return query.Where(e => e.Navigation.OwnerId == id);
+                    // Expression<Func<Entity1, bool>> e = (T e) => e.Navigation.OwnerId == id;
                     var lambda = EqualsCheckLambda(
                         syntaxCache.LambdaParameter,
-                        idAccess, IdentifierName(id.Identifier));
-                    var whereCall = WhereInvocation(
-                        IdentifierName(q.Identifier), lambda);
-                    var castedWhereCall = CastExpression(
-                        genericContext.QueryParameter.Type!, whereCall);
-                    var returnStatement = ReturnStatement(castedWhereCall);
+                        idAccess,
+                        IdentifierName(id.Identifier));
+                    var lambdaType = UnqualifiedExpressionFunc(
+                        cache,
+                        syntaxCache.EntityType,
+                        IdentifierName("bool"));
+                    var lambdaVariableIdentifier = Identifier("e");
+                    var lambdaVariableDeclaration = SingleVariableDeclaration(
+                        lambdaType,
+                        VariableDeclarator(lambdaVariableIdentifier)
+                            .WithInitializer(EqualsValueClause(lambda)));
+
+                    // return (Expression<Func<T, bool>>?) (LambdaExpression) e;
+                    var castedLambda = CastExpression(
+                        resultType,
+                        CastExpression(
+                            NullableType(IdentifierName(nameof(LambdaExpression))),
+                            IdentifierName(lambdaVariableIdentifier)));
+                    var returnStatement = ReturnStatement(castedLambda);
+
 
                     using var statements3 = cache.Statements3.Borrow();
                     statements3.Add(LocalDeclarationStatement(id.Declaration));
+                    statements3.Add(LocalDeclarationStatement(lambdaVariableDeclaration));
                     statements3.Add(returnStatement);
-                    var block = Block(statements3);
 
-                    var ifStatement = IfStatement(typeCheck, block);
+                    var ifStatement = IfStatement(typeCheck, Block(statements3));
                     statements2.Add(ifStatement);
                 }
 
                 {
-                    statements2.Add(ThrowInvalidOperationStatement);
+                    statements2.Add(ReturnNull);
 
                     // if (typeof(TEntity) == typeof(Entity1))
                     var typeCheck = BinaryExpression(
@@ -463,8 +495,14 @@ internal static class OwnershipSyntaxHelper
                 }
             }
 
-            statements.Add(ThrowInvalidOperationStatement);
-            var method = genericContext.CreateMethod(cache, StaticSyntaxCache.GenericSomeOwnerFilterIdentifier)
+            statements.Add(ReturnNull);
+            var parameter = ParameterList(SingletonSeparatedList(genericContext.OwnerIdParameter));
+            var method = MethodDeclaration(resultType, StaticSyntaxCache.GenericGetSomeOwnerFilterIdentifier)
+                .WithParameterList(parameter)
+                .WithBody(Block(statements))
+                .WithModifiers(PublicStatic);
+            method = genericContext
+                .CreateMethod(cache, method)
                 .TypeParams3();
             return method;
         }
@@ -490,8 +528,8 @@ internal static class OwnershipSyntaxHelper
                     syntaxCache.OwnerIdAccesses.Add((idNavigation.OwnerNode, idAccessName));
                     // private static readonly Expression<Func<...>> name = x => x.Navigation.Id;
                     {
-                        var lambda = SimpleLambdaExpression(
-                            syntaxCache.LambdaParameter, idNavigation.IdAccess);
+                        var lambda = ParenthesizedLambdaExpression(idNavigation.IdAccess)
+                            .WithParameterList(ParameterList(SingletonSeparatedList(syntaxCache.LambdaParameter)));
                         var expressionType = UnqualifiedExpressionFunc(
                             cache, syntaxCache.EntityType, ownerIdType);
                         var variable = VariableDeclarator(Identifier(idAccessName))
@@ -655,7 +693,7 @@ internal static class OwnershipSyntaxHelper
                 parameters.Add(entityParameter
                     // Extension method
                     .WithModifiers(TokenList(Token(SyntaxKind.ThisKeyword))));
-                parameters.Add(genericContext.IdParameter);
+                parameters.Add(genericContext.OwnerIdParameter);
 
                 var method = MethodDeclaration(
                     returnType: PredefinedType(Token(SyntaxKind.BoolKeyword)),
@@ -1088,7 +1126,7 @@ internal record GenericContext(
     TypeSyntax OwnerType,
     TypeSyntax OwnerIdType,
     ParameterSyntax QueryParameter,
-    ParameterSyntax IdParameter)
+    ParameterSyntax OwnerIdParameter)
 {
     public static GenericContext Create()
     {
@@ -1158,15 +1196,20 @@ internal record GenericContext(
         }
     }
 
-    public MethodBuilder CreateMethod(SyntaxGenerationCache cache, SyntaxToken methodName)
+    public MethodBuilder CreateQueryMethod(SyntaxGenerationCache cache, SyntaxToken methodName)
     {
         using var parameters = cache.Parameters.Borrow();
         parameters.Add(QueryParameter);
-        parameters.Add(IdParameter);
+        parameters.Add(OwnerIdParameter);
         var method = FluentExtensionMethod(methodName, parameters);
 
         method = method.WithBody(Block(cache.Statements));
 
+        return new MethodBuilder(this, cache, method);
+    }
+
+    public MethodBuilder CreateMethod(SyntaxGenerationCache cache, MethodDeclarationSyntax method)
+    {
         return new MethodBuilder(this, cache, method);
     }
 
@@ -1236,7 +1279,7 @@ internal record GenericContext(
         var coerceCall = InvocationExpression(
             GenericName(Identifier("Coerce"), coerceTypeArguments),
             ArgumentList(SingletonSeparatedList(Argument(
-                IdentifierName(IdParameter.Identifier)))));
+                IdentifierName(OwnerIdParameter.Identifier)))));
         var idDeclarator = VariableDeclarator(idIdentifier)
             .WithInitializer(EqualsValueClause(coerceCall));
         var idDeclaration = VariableDeclaration(

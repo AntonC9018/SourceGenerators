@@ -5,8 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using AutoImplementedProperties.Attributes;
-using AutoImplementedProperties.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using VerifyTests;
@@ -21,9 +19,29 @@ public static class ModuleInitializer
     public static void Init() => VerifySourceGenerators.Initialize();
 }
 
-public static class TestHelper
+public sealed class TestHelper<TSourceGenerator>
+    where TSourceGenerator : IIncrementalGenerator, new()
 {
-    public static Task Verify(string source)
+    private readonly IEnumerable<MetadataReference> _assemblyReferences;
+    private readonly string _sourceFilePath;
+
+    public TestHelper(
+        IEnumerable<MetadataReference> assemblyReferences,
+        [CallerFilePath] string sourceFilePath = "")
+    {
+        _assemblyReferences = assemblyReferences;
+        _sourceFilePath = sourceFilePath;
+    }
+
+    public Task Verify(string source)
+    {
+        return _Verify(source, _assemblyReferences, _sourceFilePath);
+    }
+
+    private static async Task _Verify(
+        string source,
+        IEnumerable<MetadataReference> assemblyReferences,
+        [CallerFilePath] string sourceFilePath = "")
     {
         SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(source,
             new(
@@ -32,19 +50,17 @@ public static class TestHelper
                 //     Constants.ConditionString
                 // }
             ));
-        var references = GetAllMetadataReferences();
-
         var compilation = CSharpCompilation.Create(
             assemblyName: "Tests",
             syntaxTrees: new[] { syntaxTree },
-            references: references,
+            references: assemblyReferences,
             options: new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable,
                 optimizationLevel: OptimizationLevel.Release,
                 assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default));
 
-        var generator = new AutoImplementedPropertyGenerator();
+        var generator = new TSourceGenerator();
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
 
@@ -53,41 +69,53 @@ public static class TestHelper
             out var compilation1,
             out var diagnostics);
 
+        async Task WriteAllGeneratedFiles()
+        {
+            var result = driver.GetRunResult();
+            foreach (var generatorResult in result.Results)
+            {
+                foreach (var generatedSource in generatorResult.GeneratedSources)
+                {
+                    await File.WriteAllTextAsync(
+                        Path.Combine("GeneratedFiles", generatedSource.HintName),
+                        generatedSource.SourceText.ToString());
+                }
+            }
+        }
+
         if (diagnostics.Any())
+        {
+            await WriteAllGeneratedFiles();
             throw new Exception(string.Join(Environment.NewLine, diagnostics));
+        }
 
         {
             var compilationDiagnostics = compilation1.GetDiagnostics();
             if (compilationDiagnostics.Any())
+            {
+                await WriteAllGeneratedFiles();
                 throw new Exception(string.Join(Environment.NewLine, compilationDiagnostics));
+            }
         }
 
-        return Verifier
-            .Verify(driver)
+        await Verifier
+            // ReSharper disable once ExplicitCallerInfoArgument
+            .Verify(driver, sourceFile: sourceFilePath)
             .UseDirectory("Snapshots");
     }
 
-    private static IEnumerable<MetadataReference> GetReferencesOfType(Type[] types)
-    {
-        var assemblyPaths = types.Select(t => t.Assembly.Location).Distinct();
-        var refs = assemblyPaths.Select(a => MetadataReference.CreateFromFile(a));
-        return refs;
-    }
+}
 
-    public static IEnumerable<MetadataReference> GetAllMetadataReferences()
+public static class TestHelper
+{
+    public static IEnumerable<MetadataReference> GetAllMetadataReferences(params Type[] requiredTypes)
     {
         var defaultMetadataReferences = ReferenceAssemblies.NetStandard20;
-        var additionalTypes = new[]
-        {
-            typeof(AutoImplementPropertiesAttribute),
-        };
-        var additionalMetadataReferences = GetReferencesOfType(additionalTypes);
-        var currentAssembly = Assembly.GetExecutingAssembly()!;
-        var referencedAssemblies = currentAssembly.GetReferencedAssemblies();
+        var additionalTypes = requiredTypes;
+        var assemblyPaths = additionalTypes.Select(t => t.Assembly.Location).Distinct();
+        var additionalMetadataReferences = assemblyPaths.Select(a => MetadataReference.CreateFromFile(a));
         var allMetadataReferences = defaultMetadataReferences.Concat(additionalMetadataReferences);
         foreach (var reference in allMetadataReferences)
             yield return reference;
-        foreach (var loadedAssembly in referencedAssemblies)
-            yield return MetadataReference.CreateFromFile(Assembly.Load(loadedAssembly).Location);
     }
 }

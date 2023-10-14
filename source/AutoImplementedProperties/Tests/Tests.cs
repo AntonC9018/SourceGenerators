@@ -1,4 +1,6 @@
 using System.Threading.Tasks;
+using AutoImplementedProperties.Attributes;
+using AutoImplementedProperties.SourceGenerator;
 using VerifyXunit;
 using Xunit;
 
@@ -7,10 +9,13 @@ namespace AutoImplementedProperties.Tests;
 [UsesVerify]
 public class Tests
 {
+    private readonly TestHelper<AutoImplementedPropertyGenerator> _helper = new(
+        TestHelper.GetAllMetadataReferences(typeof(AutoImplementPropertiesAttribute)));
+
     [Fact]
     public Task BasicTest()
     {
-        return TestHelper.Verify("""
+        return _helper.Verify("""
             using AutoImplementedProperties.Attributes;
 
             public interface IStuff
@@ -27,7 +32,7 @@ public class Tests
     [Fact]
     public Task CustomTypesTest()
     {
-        return TestHelper.Verify("""
+        return _helper.Verify("""
             using AutoImplementedProperties.Attributes;
 
             public interface IStuff

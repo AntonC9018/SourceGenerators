@@ -54,4 +54,8 @@
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
     </ItemGroup>
+
+    <ItemGroup Condition="'$(IsTests)' == 'true' and '$(MSBuildProjectName)' != 'Shared.Tests'">
+        <ProjectReference Include="$(MSBuildThisFileDirectory)Shared.Tests\Shared.Tests.csproj" />
+    </ItemGroup>
 </Project>

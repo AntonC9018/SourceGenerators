@@ -1,6 +1,10 @@
+using System;
 using System.Linq;
+using System.Linq.Expressions;
 
 namespace EntityOwnership;
+
+#nullable enable
 
 public interface ISomeOwnerFilter
 {
@@ -8,6 +12,9 @@ public interface ISomeOwnerFilter
         where TEntity : class;
 
     IQueryable<TEntity> Filter<TEntity, TOwner, TOwnerId>(IQueryable<TEntity> query, TOwnerId ownerId)
+        where TEntity : class;
+
+    Expression<Func<TEntity, bool>>? GetFilter<TEntity, TOwner, TOwnerId>(TOwnerId ownerId)
         where TEntity : class;
 }
 

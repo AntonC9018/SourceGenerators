@@ -10,7 +10,7 @@ namespace EntityOwnership.SourceGenerator;
 /// <summary>
 /// </summary>
 [Generator(LanguageNames.CSharp)]
-public sealed class OwnershipGenerator : IIncrementalGenerator
+public sealed class EntityOwnershipSourceGenerator : IIncrementalGenerator
 {
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
