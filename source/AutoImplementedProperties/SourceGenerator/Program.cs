@@ -102,7 +102,11 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
             bool shouldGenerateOverloads = false;
             {
                 using var enumerator = group.GetEnumerator();
-                Debug.Assert(enumerator.MoveNext());
+
+                // ReSharper disable once RedundantAssignment
+                bool notEmpty = enumerator.MoveNext();
+                Debug.Assert(notEmpty);
+
                 firstProperty = enumerator.Current!;
                 var firstType = firstProperty.Type;
 
