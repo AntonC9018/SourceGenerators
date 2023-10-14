@@ -1,9 +1,5 @@
 <Project>
     <PropertyGroup>
-        <Configuration>Release</Configuration>
-    </PropertyGroup>
-
-    <PropertyGroup>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>11.0</LangVersion>
         <Nullable>enable</Nullable>
