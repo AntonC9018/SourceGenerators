@@ -33,4 +33,6 @@ public interface IRootOwnerFilter : IUnspecifiedOwnerFilter
 
 public interface IDirectOwnerFilter : IUnspecifiedOwnerFilter
 {
+    bool TrySetOwnerId<TEntity, TOwner, TOwnerId>(TEntity entity, TOwnerId ownerId)
+        where TEntity : class;
 }

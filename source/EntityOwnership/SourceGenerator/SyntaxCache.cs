@@ -224,6 +224,14 @@ internal static class StaticSyntaxCache
     }
     """;
 
+    private static readonly string XTrySetOwnerIdMethod = $$"""
+        public static bool TrySetOwnerId<TEntity, TOwner, TOwnerId>(TEntity entity, TOwnerId ownerId)
+            where TEntity : class
+        {
+            return {{GenericMethodsClassIdentifier.ToString()}}.{{TrySetOwnerIdIdentifier.ToString()}}<TEntity, TOwner, TOwnerId>(entity, ownerId);
+        }
+    """;
+
     // Replace X for Y
     private static string XClassImplementation(string newX) =>
         XOwnerFilterClass.Replace("{X}", newX);

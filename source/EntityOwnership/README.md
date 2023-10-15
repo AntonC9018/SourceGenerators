@@ -39,3 +39,13 @@ I've been thinking quite a lot about how to make the generated graph contain ent
 Currently, we're only using the source generator in the context of a single project, but we may want
 to use it in the context of multiple projects in the future.
 When that time comes, I hope we'll have a better solution for this problem.
+
+
+## TODO
+
+Currently it generates an if-else chain on the generics parameters.
+As I have recently learned, it doesn't get optimized whatsoever, because generics don't make
+it generate duplicate definitions to jit separately.
+This means each call to e.g. GetFilter is O(N) in the number of entity types.
+This is pretty bad and might really become a problem eventually.
+We probably should generate a static dictionary and look up instead, but I'm not sure of the best strategy.
