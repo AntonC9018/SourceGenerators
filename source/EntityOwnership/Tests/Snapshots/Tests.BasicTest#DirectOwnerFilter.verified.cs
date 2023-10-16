@@ -21,4 +21,10 @@ public sealed class DirectOwnerFilter : global::EntityOwnership.IDirectOwnerFilt
     {
         return EntityOwnershipGenericMethods.DirectOwnerFilterT<TEntity, TOwnerId>(query, ownerId);
     }
+
+    public bool TrySetOwnerId<TEntity, TOwner, TOwnerId>(TEntity entity, TOwnerId ownerId)
+        where TEntity : class
+    {
+        return EntityOwnershipGenericMethods.TrySetOwnerId<TEntity, TOwner, TOwnerId>(entity, ownerId);
+    }
 }

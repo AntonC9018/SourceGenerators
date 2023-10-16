@@ -221,11 +221,13 @@ internal static class StaticSyntaxCache
         {
             return {{GenericMethodsClassIdentifier.ToString()}}.{X}OwnerFilterT<TEntity, TOwnerId>(query, ownerId);
         }
+    {TrySetOwnerIdMethod}
     }
     """;
 
     private static readonly string XTrySetOwnerIdMethod = $$"""
-        public static bool TrySetOwnerId<TEntity, TOwner, TOwnerId>(TEntity entity, TOwnerId ownerId)
+
+        public bool TrySetOwnerId<TEntity, TOwner, TOwnerId>(TEntity entity, TOwnerId ownerId)
             where TEntity : class
         {
             return {{GenericMethodsClassIdentifier.ToString()}}.{{TrySetOwnerIdIdentifier.ToString()}}<TEntity, TOwner, TOwnerId>(entity, ownerId);
@@ -233,8 +235,9 @@ internal static class StaticSyntaxCache
     """;
 
     // Replace X for Y
-    private static string XClassImplementation(string newX) =>
-        XOwnerFilterClass.Replace("{X}", newX);
+    private static string XClassImplementation(string newX) => XOwnerFilterClass
+        .Replace("{X}", newX)
+        .Replace("{TrySetOwnerIdMethod}", newX == "Direct" ? XTrySetOwnerIdMethod : "");
     public static readonly string RootOwnerFilterClass =
         XClassImplementation("Root");
     public static readonly string DirectOwnerFilterClass =

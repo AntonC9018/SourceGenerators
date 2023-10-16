@@ -2,7 +2,7 @@
   "profiles": {
     "Generator": {
       "commandName": "DebugRoslynComponent",
-      "targetProject": "D:\\work\\ApolloEstimate.API\\Flowqe.Backend.API.Domain\\Flowqe.Backend.API.Domain.csproj"
+      "targetProject": "..\\Sample\\EntityOwnership.Sample.csproj"
     }
   }
 }

@@ -21,4 +21,5 @@ public sealed class RootOwnerFilter : global::EntityOwnership.IRootOwnerFilter
     {
         return EntityOwnershipGenericMethods.RootOwnerFilterT<TEntity, TOwnerId>(query, ownerId);
     }
+
 }
