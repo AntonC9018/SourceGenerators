@@ -341,8 +341,17 @@ internal static class OwnershipSyntaxHelper
         outResult.Add(StaticSyntaxCache.SomeOwnerFilterTMethod);
         outResult.Add(StaticSyntaxCache.CoerceMethod);
         AddGetOwnerIdAccesses();
-        outResult.Add(CreateGetOwnerIdMethod());
         outResult.Add(CreateTrySetDirectOwnerIdMethod());
+
+        foreach (var expressionKind in new[]
+            {
+                OwnerExpressionKind.Id,
+                OwnerExpressionKind.Owner,
+            })
+        {
+            var method = AddGetOwnerNavigationExpressionsMethods(expressionKind);
+            outResult.Add(method);
+        }
 
         // "Switch" here is an analogy.
         MethodDeclarationSyntax CreateSwitchMethod(int methodIndex)
@@ -434,7 +443,7 @@ internal static class OwnershipSyntaxHelper
                 using var statements2 = cache.Statements2.Borrow();
                 var startExpression = IdentifierName(syntaxCache.LambdaParameter.Identifier);
                 var typeofGenericOwner = TypeOfExpression(genericContext.OwnerType);
-                foreach (var (ownerNode, idAccess) in GetIdNavigations(startExpression, graphNode))
+                foreach (var (ownerNode, idAccess, _) in GetIdNavigations(startExpression, graphNode))
                 {
                     if (ownerNode.SyntaxCache is not { IdType: { } ownerIdType } ownerSyntaxCache)
                         continue;
@@ -524,86 +533,41 @@ internal static class OwnershipSyntaxHelper
                     if (ownerSyntaxCache.IdType is not { } ownerIdType)
                         continue;
 
-                    var idAccessName = syntaxCache.GetOwnerIdAccessName(ownerSyntaxCache);
-                    syntaxCache.OwnerIdAccesses.Add((idNavigation.OwnerNode, idAccessName));
                     // private static readonly Expression<Func<...>> name = x => x.Navigation.Id;
+                    AddAccessThing(
+                        ownerIdType,
+                        idNavigation.IdAccess,
+                        OwnerExpressionKind.Id);
+
+                    if (idNavigation.OwnerAccess is not null)
                     {
-                        var lambda = ParenthesizedLambdaExpression(idNavigation.IdAccess)
+                        // private static readonly Expression<Func<...>> name = x => x.Navigation;
+                        AddAccessThing(
+                            ownerSyntaxCache.EntityType,
+                            idNavigation.OwnerAccess,
+                            OwnerExpressionKind.Owner);
+                    }
+
+                    void AddAccessThing(
+                        TypeSyntax outputTypeOfLambda,
+                        ExpressionSyntax access,
+                        OwnerExpressionKind expressionKind)
+                    {
+                        var accessName = syntaxCache.GetOwnerAccessName(ownerSyntaxCache, expressionKind);
+                        var outputList = syntaxCache.GetOwnerAccessesList(expressionKind);
+                        outputList.Add((idNavigation.OwnerNode, accessName));
+
+                        var lambda = ParenthesizedLambdaExpression(access)
                             .WithParameterList(ParameterList(SingletonSeparatedList(syntaxCache.LambdaParameter)));
                         var expressionType = UnqualifiedExpressionFunc(
-                            cache, syntaxCache.EntityType, ownerIdType);
-                        var variable = VariableDeclarator(Identifier(idAccessName))
+                            cache, syntaxCache.EntityType, outputTypeOfLambda);
+                        var variable = VariableDeclarator(Identifier(accessName))
                             .WithInitializer(EqualsValueClause(lambda));
                         var idAccessMember = FieldDeclaration(SingleVariableDeclaration(expressionType, variable))
                             .WithModifiers(PrivateStaticReadonly);
                         outResult.Add(idAccessMember);
                     }
                 }
-            }
-        }
-
-        // GetOwnerId<TEntity, TOwner, TOwnerId>() => (e => e.Navigation.OwnerId)
-        MethodDeclarationSyntax CreateGetOwnerIdMethod()
-        {
-            using var statements = cache.Statements.Borrow();
-
-            // Expression<Func<TEntity, TOwnerId>>
-            var methodReturnType = UnqualifiedExpressionFunc(
-                cache, genericContext.EntityType, genericContext.OwnerIdType);
-
-            foreach (var graphNode in graph.Nodes)
-            {
-                if (graphNode.SyntaxCache is not { } syntaxCache)
-                    continue;
-
-                using var statements2 = cache.Statements2.Borrow();
-
-                foreach (var (ownerNode, idAccessName) in syntaxCache.OwnerIdAccesses)
-                {
-                    var ownerSyntaxCache = ownerNode.SyntaxCache!;
-                    // if (typeof(TOwner) == typeof(Entity1Owner1))
-                    var typeCheck = BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        TypeOfExpression(genericContext.OwnerType),
-                        TypeOfExpression(ownerSyntaxCache.EntityType));
-                    // return (...) _CachedExpression;
-                    var casted = CastExpression(methodReturnType,
-                        CastExpression(IdentifierName("object"), IdentifierName(idAccessName)));
-                    var returnStatement = ReturnStatement(casted);
-                    var ifStatement = IfStatement(typeCheck, returnStatement);
-                    statements2.Add(ifStatement);
-                }
-                statements2.Add(ReturnNull);
-
-                {
-                    // if (typeof(T) == typeof(Entity1))
-                    var typeCheck = BinaryExpression(
-                        SyntaxKind.EqualsExpression,
-                        TypeOfExpression(genericContext.EntityType),
-                        TypeOfExpression(syntaxCache.EntityType));
-                    var block = Block(statements2);
-                    var ifStatement = IfStatement(typeCheck, block);
-                    statements.Add(ifStatement);
-                }
-            }
-
-            statements.Add(ReturnNull);
-            {
-                using var typeParameters = cache.TypeParameters.Borrow();
-                typeParameters.Add(genericContext.EntityTypeParameter);
-                typeParameters.Add(genericContext.OwnerTypeParameter);
-                typeParameters.Add(genericContext.OwnerIdTypeParameter);
-
-                var returnType = NullableType(methodReturnType);
-                var method = MethodDeclaration(
-                    returnType: returnType,
-                    identifier: StaticSyntaxCache.GetOwnerIdExpressionIdentifier)
-
-                    .WithTypeParameterList(TypeParameterList(SeparatedList(typeParameters)))
-                    .WithModifiers(PublicStatic)
-                    .WithBody(Block(statements));
-
-                return method;
             }
         }
 
@@ -621,8 +585,8 @@ internal static class OwnershipSyntaxHelper
                         SyntaxCache: { } syntaxCache,
                         OwnerNode.SyntaxCache:
                         {
-                            IdType: { } ownerIdType
-                        } ownerSyntaxCache
+                            IdType: { } ownerIdType,
+                        } ownerSyntaxCache,
                     })
                 {
                     continue;
@@ -714,6 +678,75 @@ internal static class OwnershipSyntaxHelper
                 return method;
             }
         }
+
+        // GetOwnerId(Type entity, Type owner) => (e => e.Navigation.OwnerId)
+        MethodDeclarationSyntax AddGetOwnerNavigationExpressionsMethods(OwnerExpressionKind expressionKind)
+        {
+            using var statements = cache.Statements.Borrow();
+
+            var methodReturnType = IdentifierName(nameof(Expression));
+
+            ParameterSyntax TypeParam(string name)
+            {
+                return Parameter(Identifier(name))
+                    .WithType(ParseTypeName(typeof(Type).FullName!));
+            }
+
+            var entityTypeParameter = TypeParam("entityType");
+            var ownerTypeParameter = TypeParam("ownerType");
+
+            foreach (var graphNode in graph.Nodes)
+            {
+                if (graphNode.SyntaxCache is not { } syntaxCache)
+                    continue;
+
+                using var statements2 = cache.Statements2.Borrow();
+
+                foreach (var (ownerNode, idAccessName) in syntaxCache.GetOwnerAccessesList(expressionKind))
+                {
+                    var ownerSyntaxCache = ownerNode.SyntaxCache!;
+                    // if (typeof(TOwner) == typeof(Entity1Owner1))
+                    var typeCheck = BinaryExpression(
+                        SyntaxKind.EqualsExpression,
+                        IdentifierName(ownerTypeParameter.Identifier),
+                        TypeOfExpression(ownerSyntaxCache.EntityType));
+                    // return _CachedExpression;
+                    var returnStatement = ReturnStatement(IdentifierName(idAccessName));
+                    var ifStatement = IfStatement(typeCheck, returnStatement);
+                    statements2.Add(ifStatement);
+                }
+                statements2.Add(ReturnNull);
+
+                {
+                    // if (typeof(T) == typeof(Entity1))
+                    var typeCheck = BinaryExpression(
+                        SyntaxKind.EqualsExpression,
+                        IdentifierName(entityTypeParameter.Identifier),
+                        TypeOfExpression(syntaxCache.EntityType));
+                    var block = Block(statements2);
+                    var ifStatement = IfStatement(typeCheck, block);
+                    statements.Add(ifStatement);
+                }
+            }
+
+            statements.Add(ReturnNull);
+            {
+                using var typeParameters = cache.Parameters.Borrow();
+                typeParameters.Add(entityTypeParameter);
+                typeParameters.Add(ownerTypeParameter);
+
+                var returnType = NullableType(methodReturnType);
+                var method = MethodDeclaration(
+                    returnType: returnType,
+                    identifier: StaticSyntaxCache.GetGetOwnerExpressionIdentifier(expressionKind))
+
+                    .WithParameterList(ParameterList(SeparatedList(typeParameters)))
+                    .WithModifiers(PublicStatic)
+                    .WithBody(Block(statements));
+
+                return method;
+            }
+        }
     }
 
     private static GenericNameSyntax UnqualifiedExpressionFunc(
@@ -732,12 +765,17 @@ internal static class OwnershipSyntaxHelper
         return expressionType;
     }
 
+    private record struct OwnerAccessExpressions(
+        GraphNode OwnerNode,
+        ExpressionSyntax IdAccess,
+        ExpressionSyntax? OwnerAccess);
+
     // q --> q.Navigation.Id
-    private static IEnumerable<(GraphNode OwnerNode, ExpressionSyntax IdAccess)> GetIdNavigations(
+    private static IEnumerable<OwnerAccessExpressions> GetIdNavigations(
         ExpressionSyntax start, GraphNode leaf)
     {
         if (leaf.IdProperty is { } leafIdProperty)
-            yield return (leaf, PropertyAccess(start, leafIdProperty));
+            yield return new(leaf, PropertyAccess(start, leafIdProperty), start);
         if (leaf.OwnerNode is not { } ownerNode)
             yield break;
 
@@ -761,7 +799,7 @@ internal static class OwnershipSyntaxHelper
             else
                 yield break;
 
-            yield return (ownerNode, ownerIdAccess);
+            yield return new(ownerNode, ownerIdAccess, chainToParent);
 
             if (chainToParent is null)
                 yield break;
@@ -772,7 +810,12 @@ internal static class OwnershipSyntaxHelper
         }
 
         if (node.GetOwnerIdExpression(chainToNode) is { } idAccess)
-            yield return (ownerNode, idAccess);
+        {
+            ExpressionSyntax? ownerNavigationExpression = null;
+            if (node.OwnerNavigation is { } ownerNavigation)
+                ownerNavigationExpression = PropertyAccess(chainToNode, ownerNavigation);
+            yield return new(ownerNode, idAccess, ownerNavigationExpression);
+        }
     }
 
     /*
@@ -816,7 +859,7 @@ internal static class OwnershipSyntaxHelper
         SyntaxGenerationCache cache,
         List<MemberDeclarationSyntax> outResult)
     {
-        var typeType = ParseTypeName(typeof(Type).FullName);
+        var typeType = ParseTypeName(typeof(Type).FullName!);
         var nullableTypeType = NullableType(typeType);
         var entityTypeParameter = Parameter(Identifier("entityType"))
             .WithType(typeType);
@@ -1115,6 +1158,7 @@ internal static class OwnershipSyntaxHelper
                 .WithTypeParameterList(TypeParameterList(SingletonSeparatedList(typeParameter)));
             outResult.Add(method);
         }
+
     }
 }
 

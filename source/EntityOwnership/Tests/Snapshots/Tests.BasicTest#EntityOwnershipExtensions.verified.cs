@@ -105,29 +105,11 @@ namespace EntityOwnership
         }
 
         private static readonly Expression<Func<Root, int>> Id__Root__Root = (Root r) => r.Id;
+        private static readonly Expression<Func<Root, Root>> Owner__Root__Root = (Root r) => r;
         private static readonly Expression<Func<Child1, string>> Id__Child1__Child1 = (Child1 c) => c.Id;
+        private static readonly Expression<Func<Child1, Child1>> Owner__Child1__Child1 = (Child1 c) => c;
         private static readonly Expression<Func<Child1, int>> Id__Child1__Root = (Child1 c) => c.RootId;
-        public static Expression<Func<T, TId>>? GetOwnerIdExpression<T, TOwner, TId>()
-        {
-            if (typeof(T) == typeof(Root))
-            {
-                if (typeof(TOwner) == typeof(Root))
-                    return (Expression<Func<T, TId>>)(object)Id__Root__Root;
-                return null;
-            }
-
-            if (typeof(T) == typeof(Child1))
-            {
-                if (typeof(TOwner) == typeof(Child1))
-                    return (Expression<Func<T, TId>>)(object)Id__Child1__Child1;
-                if (typeof(TOwner) == typeof(Root))
-                    return (Expression<Func<T, TId>>)(object)Id__Child1__Root;
-                return null;
-            }
-
-            return null;
-        }
-
+        private static readonly Expression<Func<Child1, Root>> Owner__Child1__Root = (Child1 c) => c.Root;
         public static bool TrySetOwnerId<T, TOwner, TId>(this T entity, TId ownerId)
             where T : notnull
         {
@@ -142,6 +124,48 @@ namespace EntityOwnership
             }
 
             return false;
+        }
+
+        public static Expression? GetOwnerIdExpression(System.Type entityType, System.Type ownerType)
+        {
+            if (entityType == typeof(Root))
+            {
+                if (ownerType == typeof(Root))
+                    return Id__Root__Root;
+                return null;
+            }
+
+            if (entityType == typeof(Child1))
+            {
+                if (ownerType == typeof(Child1))
+                    return Id__Child1__Child1;
+                if (ownerType == typeof(Root))
+                    return Id__Child1__Root;
+                return null;
+            }
+
+            return null;
+        }
+
+        public static Expression? GetOwnerExpression(System.Type entityType, System.Type ownerType)
+        {
+            if (entityType == typeof(Root))
+            {
+                if (ownerType == typeof(Root))
+                    return Owner__Root__Root;
+                return null;
+            }
+
+            if (entityType == typeof(Child1))
+            {
+                if (ownerType == typeof(Child1))
+                    return Owner__Child1__Child1;
+                if (ownerType == typeof(Root))
+                    return Owner__Child1__Root;
+                return null;
+            }
+
+            return null;
         }
     }
 

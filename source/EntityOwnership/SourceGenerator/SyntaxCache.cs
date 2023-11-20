@@ -28,6 +28,15 @@ internal record NodeSyntaxCache(
     public TypeSyntax? IdType => IdParameter?.Type;
 
     public List<(GraphNode OwnerNode, string Name)> OwnerIdAccesses { get; } = new();
+    public List<(GraphNode OwnerNode, string Name)> OwnerAccesses { get; } = new();
+
+    public List<(GraphNode OwnerNode, string Name)> GetOwnerAccessesList(OwnerExpressionKind kind) =>
+        kind switch
+        {
+            OwnerExpressionKind.Id => OwnerIdAccesses,
+            OwnerExpressionKind.Owner => OwnerAccesses,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
 
     public static NodeSyntaxCache? Create(GraphNode node)
     {
@@ -68,15 +77,25 @@ internal record NodeSyntaxCache(
             escapedEntityTypeName);
     }
 
-    public string GetOwnerIdAccessName(NodeSyntaxCache ownerSyntaxCache)
-    {
-        return $"Id__{EscapedEntityTypeName}__{ownerSyntaxCache.EscapedEntityTypeName}";
-    }
+    public string GetOwnerAccessName(NodeSyntaxCache ownerSyntaxCache, OwnerExpressionKind kind) =>
+        kind switch
+        {
+            OwnerExpressionKind.Id => $"Id__{EscapedEntityTypeName}__{ownerSyntaxCache.EscapedEntityTypeName}",
+            OwnerExpressionKind.Owner => $"Owner__{EscapedEntityTypeName}__{ownerSyntaxCache.EscapedEntityTypeName}",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+
 
     public string GetDependentTypesArrayName()
     {
         return $"DependentTypes__{EscapedEntityTypeName}";
     }
+}
+
+public enum OwnerExpressionKind
+{
+    Id,
+    Owner,
 }
 
 public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
@@ -144,10 +163,19 @@ internal static class StaticSyntaxCache
     public static readonly SyntaxToken GenericMethodsClassIdentifier = Identifier("EntityOwnershipGenericMethods");
     public static readonly SyntaxToken HelperClassIdentifier = Identifier("EntityOwnershipHelper");
     public static readonly SyntaxToken GetOwnerIdExpressionIdentifier = Identifier("GetOwnerIdExpression");
+    public static readonly SyntaxToken GetOwnerExpressionIdentifier = Identifier("GetOwnerExpression");
     public static readonly SyntaxToken TrySetOwnerIdIdentifier = Identifier("TrySetOwnerId");
     public static readonly SyntaxToken GetDependentTypesIdentifier = Identifier("GetDependentTypes");
     public static readonly SyntaxToken GenericSomeOwnerFilterIdentifier = Identifier("SomeOwnerFilterT");
     public static readonly SyntaxToken GenericGetSomeOwnerFilterIdentifier = Identifier("GetSomeOwnerFilterT");
+
+    public static SyntaxToken GetGetOwnerExpressionIdentifier(OwnerExpressionKind expressionKind) =>
+        expressionKind switch
+        {
+            OwnerExpressionKind.Id => GetOwnerIdExpressionIdentifier,
+            OwnerExpressionKind.Owner => GetOwnerExpressionIdentifier,
+            _ => throw new ArgumentOutOfRangeException(nameof(expressionKind), expressionKind, null),
+        };
 
     // I'm sure this one is never cached though.
     public static readonly MethodDeclarationSyntax CoerceMethod = (MethodDeclarationSyntax) ParseMemberDeclaration($$"""
