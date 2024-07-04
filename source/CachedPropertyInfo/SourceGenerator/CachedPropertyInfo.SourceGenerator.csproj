@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Shared\Include.targets" />
+  <Import Project="..\..\Utils.Shared\Include.targets" />
+  <ItemGroup>
+    <Compile Include="..\..\SourceGeneration\Extensions\SyntaxFactoryHelper.cs">
+      <Link>Extensions\SyntaxFactoryHelper.cs</Link>
+    </Compile>
+    <Compile Include="..\..\SourceGeneration\Helpers\IndentedCodeWriter.cs">
+      <Link>Helpers\IndentedCodeWriter.cs</Link>
+    </Compile>
+  </ItemGroup>
+</Project>

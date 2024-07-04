@@ -72,6 +72,7 @@ public sealed class TestHelper<TSourceGenerator>
         async Task WriteAllGeneratedFiles()
         {
             var result = driver.GetRunResult();
+            Directory.CreateDirectory("GeneratedFiles");
             foreach (var generatorResult in result.Results)
             {
                 foreach (var generatedSource in generatorResult.GeneratedSources)

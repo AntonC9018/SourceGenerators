@@ -36,7 +36,7 @@ internal sealed record TypeInfo(string QualifiedName, TypeKind Kind, bool IsReco
                 RecordDeclaration(Token(SyntaxKind.RecordKeyword), QualifiedName)
                 .WithOpenBraceToken(Token(SyntaxKind.OpenBraceToken))
                 .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken)),
-            _ => ClassDeclaration(QualifiedName)
+            _ => ClassDeclaration(QualifiedName),
         };
     }
 }

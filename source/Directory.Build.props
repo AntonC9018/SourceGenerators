@@ -1,7 +1,7 @@
 <Project>
     <PropertyGroup>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <LangVersion>11.0</LangVersion>
+        <LangVersion>12.0</LangVersion>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
@@ -26,7 +26,7 @@
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(IsTests)' == 'true'">
-        <TargetFramework>net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <IsPackable>false</IsPackable>
 
         <!-- Unit tests don't need public XML docs -->

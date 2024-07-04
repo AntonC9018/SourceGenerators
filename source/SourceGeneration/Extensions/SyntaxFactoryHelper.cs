@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
-namespace EntityOwnership.SourceGenerator;
+namespace SourceGeneration.Extensions;
 
 public static class SyntaxFactoryHelper
 {
@@ -46,6 +45,13 @@ public static class SyntaxFactoryHelper
     {
         Token(SyntaxKind.PublicKeyword),
         Token(SyntaxKind.StaticKeyword),
+    });
+
+    public static readonly SyntaxTokenList PublicStaticReadonly = TokenList(new[]
+    {
+        Token(SyntaxKind.PublicKeyword),
+        Token(SyntaxKind.StaticKeyword),
+        Token(SyntaxKind.ReadOnlyKeyword),
     });
 
     private static readonly SyntaxToken[] _ThisKeyword = { Token(SyntaxKind.ThisKeyword) };
