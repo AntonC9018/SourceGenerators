@@ -2,13 +2,13 @@
 using System.Diagnostics;
 using SourceGeneration.Shared;
 
-namespace CachedPropertyInfo.Shared;
+namespace PropertyCacheHelper.Shared;
 
 /// <summary>
 /// </summary>
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class,
     Inherited = true)]
 [Conditional(Constants.ConditionString)]
-public sealed class CachedPropertyInfoAttribute : Attribute
+public sealed class CachePropertyInfoAttribute : Attribute
 {
 }

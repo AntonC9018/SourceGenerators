@@ -1,25 +1,25 @@
 using System.Threading.Tasks;
 using AutoImplementedProperties.Tests;
-using CachedPropertyInfo.Shared;
-using CachedPropertyInfo.SourceGenerator;
+using PropertyCacheHelper.Shared;
+using PropertyCacheHelper.SourceGenerator;
 using VerifyXunit;
 using Xunit;
 
-namespace CachedPropertyInfo.Tests;
+namespace PropertyCacheHelper.Tests;
 
 [UsesVerify]
 public class Tests
 {
     private readonly TestHelper<CachedPropertyInfoGenerator> _helper = new(
-        TestHelper.GetAllMetadataReferences(typeof(CachedPropertyInfoAttribute)));
+        TestHelper.GetAllMetadataReferences(typeof(CachePropertyInfoAttribute)));
 
     [Fact]
     public Task BasicTest()
     {
         return _helper.Verify("""
-            using CachedPropertyInfo.Shared;
+            using PropertyCacheHelper.Shared;
 
-            [CachedPropertyInfo]
+            [CachePropertyInfo]
             public sealed class Hello
             {
                 public int Id { get; set; }

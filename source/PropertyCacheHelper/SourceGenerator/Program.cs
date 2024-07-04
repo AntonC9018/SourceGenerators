@@ -1,15 +1,15 @@
 ﻿using System.Diagnostics;
 using System.Linq;
-using CachedPropertyInfo.Shared;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
+using PropertyCacheHelper.Shared;
 using SourceGeneration.Extensions;
 using SourceGeneration.Models;
 
-namespace CachedPropertyInfo.SourceGenerator;
+namespace PropertyCacheHelper.SourceGenerator;
 
 /// <summary>
-/// A source generator creating properties for types annotated with <see cref="CachedPropertyInfoAttribute"/>.
+/// A source generator creating properties for types annotated with <see cref="CachePropertyInfoAttribute"/>.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
@@ -90,7 +90,7 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
 
     private static void GenerateCachedPropertyInfos(Info info, IndentedTextWriter w)
     {
-        var t = typeof(Shared.CachedPropertyInfo<,>);
+        var t = typeof(CachedPropertyInfo<,>);
         var cachedPropertyTypeName = t.FullName![.. t.FullName.IndexOf('`')];
         Debug.Assert(cachedPropertyTypeName != "");
 

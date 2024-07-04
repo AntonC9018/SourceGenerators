@@ -11,7 +11,10 @@ public static class SpanHelper
     {
         var result = new TBase[span.Length];
         for (int i = 0; i < span.Length; i++)
+        {
             result[i] = span[i];
+        }
+
         return result;
     }
 
@@ -20,7 +23,10 @@ public static class SpanHelper
     {
         var result = new TBase[span.Length];
         for (int i = 0; i < span.Length; i++)
+        {
             result[i] = span[i];
+        }
+
         return result;
     }
 

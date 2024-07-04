@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
-using CachedPropertyInfo.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using PropertyCacheHelper.Shared;
 
-namespace CachedPropertyInfo.SourceGenerator;
+namespace PropertyCacheHelper.SourceGenerator;
 
 public static class ShouldBeAutogened
 {
@@ -36,7 +36,7 @@ public static class ShouldBeAutogened
         }
 
         return syntaxProvider.ForAttributeWithMetadataName(
-            typeof(CachedPropertyInfoAttribute).FullName
+            typeof(CachePropertyInfoAttribute).FullName
                 ?? throw new InvalidOperationException("Attribute type without full name"),
             filter,
             (context, cancellationToken) =>
