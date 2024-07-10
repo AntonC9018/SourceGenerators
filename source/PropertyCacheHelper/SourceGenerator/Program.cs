@@ -37,6 +37,7 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
         {
             public required TypeSyntaxReference Type { get; init; }
             public required string Name { get; init; }
+            public required string? JsonName { get; init; }
         }
 
         public required EquatableArray<Property> Properties { get; init; }
@@ -50,6 +51,10 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
         var properties = context.TargetSymbol
             .GetAllMembers()
             .OfType<IPropertySymbol>();
+
+        var jsonPropertyAttribute = context.SemanticModel.Compilation
+            .GetTypeByMetadataName("System.Text.Json.Serialization.JsonPropertyNameAttribute");
+
         using var propertiesBuilder = ImmutableArrayBuilder<Info.Property>.Rent();
         foreach (var p in properties)
         {
@@ -68,10 +73,31 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
                 continue;
             }
 
+            string? GetJsonName()
+            {
+                foreach (var attr in p.GetAttributes())
+                {
+                    if (attr.AttributeClass is not {} c)
+                    {
+                        continue;
+                    }
+                    if (!c.Equals(jsonPropertyAttribute, SymbolEqualityComparer.Default))
+                    {
+                        continue;
+                    }
+                    if (attr.TryGetConstructorArgument<string>(0, out var arg))
+                    {
+                        return arg;
+                    }
+                }
+                return null;
+            }
+
             propertiesBuilder.Add(new()
             {
                 Type = TypeSyntaxReference.From(p.Type),
                 Name = p.Name,
+                JsonName = GetJsonName(),
             });
         }
 
@@ -101,7 +127,11 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
         {
             foreach (var p in info.Properties)
             {
-                w.WriteLine($"public static readonly global::{cachedPropertyTypeName}<{info.ParentType.FullyQualifiedName}, {p.Type.FullyQualifiedName}> {p.Name} = new(x => x.{p.Name});");
+                w.Write($"public static readonly global::{cachedPropertyTypeName}<{info.ParentType.FullyQualifiedName}, {p.Type.FullyQualifiedName}> {p.Name} =");
+                w.Write($" new(x => x.{p.Name}");
+                w.WriteIf(p.JsonName != null, $", jsonPropertyName: \"{p.JsonName}\"");
+                w.Write(");");
+                w.WriteLine();
             }
         }
     }

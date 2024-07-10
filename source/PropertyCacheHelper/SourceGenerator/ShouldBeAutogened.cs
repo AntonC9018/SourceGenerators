@@ -10,12 +10,15 @@ public static class ShouldBeAutogened
 {
     public readonly struct TypedGeneratorContext
     {
+        public readonly SemanticModel SemanticModel;
         public readonly INamedTypeSymbol TargetSymbol;
 
         public TypedGeneratorContext(
-            INamedTypeSymbol targetSymbol)
+            INamedTypeSymbol targetSymbol,
+            SemanticModel semanticModel)
         {
             TargetSymbol = targetSymbol;
+            SemanticModel = semanticModel;
         }
     }
 
@@ -43,7 +46,8 @@ public static class ShouldBeAutogened
             {
                 INamedTypeSymbol symbol = (INamedTypeSymbol) context.TargetSymbol;
                 var typedContext = new TypedGeneratorContext(
-                    symbol);
+                    symbol,
+                    context.SemanticModel);
                 return valueFactory(typedContext, cancellationToken);
             });
     }
