@@ -2,6 +2,7 @@
 using System.Linq;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using PropertyCacheHelper.Shared;
 using SourceGeneration.Extensions;
 using SourceGeneration.Models;
@@ -40,6 +41,7 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
             public required string? JsonName { get; init; }
         }
 
+        public required Accessibility Accessibility { get; init; }
         public required EquatableArray<Property> Properties { get; init; }
         public required TypeSyntaxReference ParentType { get; init; }
         public required string Namespace { get; init; }
@@ -107,6 +109,7 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
             ParentType = TypeSyntaxReference.From(context.TargetSymbol),
             Namespace = context.TargetSymbol.ContainingNamespace.ToDisplayString(NamespaceDisplayFormat),
             ParentTypeName = context.TargetSymbol.Name,
+            Accessibility = context.TargetSymbol.DeclaredAccessibility,
         };
     }
 
@@ -122,7 +125,10 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
 
         w.WriteFileStart(nullableEnable: true);
         w.WriteLineIf(info.Namespace != "", $"namespace {info.Namespace};");
-        w.WriteLine($"public static class {info.ParentTypeName}Props");
+
+        var accessibilityString = SyntaxFacts.GetText(info.Accessibility);
+        w.WriteLine($"{accessibilityString} static class {info.ParentTypeName}Props");
+
         using (w.WriteBlock())
         {
             foreach (var p in info.Properties)
