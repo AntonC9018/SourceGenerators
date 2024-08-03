@@ -19,7 +19,7 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         IncrementalValuesProvider<Info> propertiesInfo = context.SyntaxProvider
-            .ForAutoImplementedAttribute(static (context, _) => GetInfo(context))
+            .ForCachedPropertyAttribute(static (context, _) => GetInfo(context))
             .Where(static info => info.Properties.Length > 0);
 
         context.RegisterSourceOutput(propertiesInfo, static (context, item) =>
@@ -52,10 +52,20 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
     {
         var properties = context.TargetSymbol
             .GetAllMembers()
-            .OfType<IPropertySymbol>();
+            .OfType<IPropertySymbol>()
+            .ToArray();
+
+        bool IsMarked(IPropertySymbol p)
+        {
+            return p.TryGetAttributeWithFullyQualifiedMetadataName(
+                typeof(CachePropertyInfoAttribute).FullName!,
+                out _);
+        }
+        bool hasMarkedProperties = properties.Any(IsMarked);
 
         var jsonPropertyAttribute = context.SemanticModel.Compilation
             .GetTypeByMetadataName("System.Text.Json.Serialization.JsonPropertyNameAttribute");
+
 
         using var propertiesBuilder = ImmutableArrayBuilder<Info.Property>.Rent();
         foreach (var p in properties)
@@ -73,6 +83,14 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
             if (p.GetMethod is null)
             {
                 continue;
+            }
+
+            if (hasMarkedProperties)
+            {
+                if (!IsMarked(p))
+                {
+                    continue;
+                }
             }
 
             string? GetJsonName()

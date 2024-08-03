@@ -7,7 +7,6 @@ using Xunit;
 
 namespace PropertyCacheHelper.Tests;
 
-[UsesVerify]
 public class Tests
 {
     private readonly TestHelper<CachedPropertyInfoGenerator> _helper = new(
@@ -22,6 +21,22 @@ public class Tests
             [CachePropertyInfo]
             public sealed class Hello
             {
+                public int Id { get; set; }
+                public string? Name { get; set; }
+            }
+        """);
+    }
+
+    [Fact]
+    public Task ExplicitPropertyTest()
+    {
+        return _helper.Verify("""
+            using PropertyCacheHelper.Shared;
+
+            [CachePropertyInfo]
+            public sealed class Hello
+            {
+                [CachePropertyInfo]
                 public int Id { get; set; }
                 public string? Name { get; set; }
             }

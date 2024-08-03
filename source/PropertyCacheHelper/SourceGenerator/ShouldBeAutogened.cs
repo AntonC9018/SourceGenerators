@@ -22,7 +22,7 @@ public static class ShouldBeAutogened
         }
     }
 
-    public static IncrementalValuesProvider<T> ForAutoImplementedAttribute<T>(
+    public static IncrementalValuesProvider<T> ForCachedPropertyAttribute<T>(
         this SyntaxValueProvider syntaxProvider,
         Func<TypedGeneratorContext, CancellationToken, T> valueFactory,
         Func<SyntaxNode, CancellationToken, bool>? additionalSyntaxFilter = null)
@@ -39,8 +39,7 @@ public static class ShouldBeAutogened
         }
 
         return syntaxProvider.ForAttributeWithMetadataName(
-            typeof(CachePropertyInfoAttribute).FullName
-                ?? throw new InvalidOperationException("Attribute type without full name"),
+            typeof(CachePropertyInfoAttribute).FullName!,
             filter,
             (context, cancellationToken) =>
             {
