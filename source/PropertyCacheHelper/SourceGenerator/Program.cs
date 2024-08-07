@@ -50,8 +50,9 @@ public sealed class CachedPropertyInfoGenerator : IIncrementalGenerator
 
     private static Info GetInfo(ShouldBeAutogened.TypedGeneratorContext context)
     {
+        // TODO: Maybe make getters for derived types to return the values in the base props class.
         var properties = context.TargetSymbol
-            .GetAllMembers()
+            .GetMembers()
             .OfType<IPropertySymbol>()
             .ToArray();
 

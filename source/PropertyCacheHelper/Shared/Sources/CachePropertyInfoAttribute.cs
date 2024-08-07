@@ -10,7 +10,7 @@ namespace PropertyCacheHelper.Shared;
 /// If only applied to the class, a static PropertyInfo field is generated for each property.
 /// </summary>
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class | AttributeTargets.Property,
-    Inherited = true)]
+    Inherited = false)]
 [Conditional(Constants.ConditionString)]
 public sealed class CachePropertyInfoAttribute : Attribute
 {

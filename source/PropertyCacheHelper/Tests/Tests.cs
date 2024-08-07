@@ -42,4 +42,42 @@ public class Tests
             }
         """);
     }
+
+
+    [Fact]
+    public Task InheritancePropertyTest()
+    {
+        return _helper.Verify("""
+            using PropertyCacheHelper.Shared;
+
+            [CachePropertyInfo]
+            public abstract class Base
+            {
+                [CachePropertyInfo]
+                public int Id { get; set; }
+                public string? Name { get; set; }
+            }
+
+            [CachePropertyInfo]
+            public sealed class Derived
+            {
+                public int IdDerived { get; set; }
+            }
+
+            [CachePropertyInfo]
+            public sealed class OtherDerived
+            {
+                [CachePropertyInfo]
+                public int IdDerived { get; set; }
+                public string? Ignored { get; set; }
+            }
+
+            public sealed class NotGeneratedDerived
+            {
+                [CachePropertyInfo]
+                public int IdDerived { get; set; }
+                public string? Ignored { get; set; }
+            }
+        """);
+    }
 }
