@@ -29,10 +29,10 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v4
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v2
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v4
     - name: Build
-      run: msbuild /restore -t:build /p:Configuration=${{matrix.configuration}} /bl
+      run: dotnet restore sln.sln --configuration=${{matrix.configuration}} /bl
     - name: Upload MSBuild binary log
       uses: actions/upload-artifact@v4
       with:
@@ -50,8 +50,8 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v4
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v2
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v4
     - name: Build Utils.Shared
       run: dotnet pack source\Utils.Shared\Utils.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.Shared
@@ -66,3 +66,14 @@ jobs:
         name: nuget_packages
         path: artifacts\*.nupkg
         if-no-files-found: error
+
+  # Publish the packages to GitHub packages
+  publish-nightlies-github:
+    runs-on: ubuntu-latest
+    if: ${{github.event_name == 'push'}}
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: nuget_packages
+        path: artifacts
+    - run: dotnet nuget push "artifacts\*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
