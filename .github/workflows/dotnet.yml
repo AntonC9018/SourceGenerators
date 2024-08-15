@@ -30,18 +30,18 @@ jobs:
     - name: Setup dotnet
       uses: actions/setup-dotnet@v4
     - name: Build Utils.Shared
-      run: dotnet pack source\Utils.Shared\Utils.Shared.csproj -c Release
+      run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.Shared
-      run: dotnet pack source\PropertyCacheHelper.Shared\PropertyCacheHelper.Shared.csproj -c Release
+      run: dotnet pack source/PropertyCacheHelper.Shared/PropertyCacheHelper.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.SourceGenerator
-      run: dotnet pack source\PropertyCacheHelper.SourceGenerator\PropertyCacheHelper.SourceGenerator.csproj -c Release
+      run: dotnet pack source/PropertyCacheHelper.SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj -c Release
 
       # Upload the packages to the pipeline artifacts
     - name: Upload package artifacts
       uses: actions/upload-artifact@v4
       with:
         name: nuget_packages
-        path: artifacts\*.nupkg
+        path: artifacts/*.nupkg
         if-no-files-found: error
 
   # Publish the packages to GitHub packages
@@ -54,4 +54,4 @@ jobs:
       with:
         name: nuget_packages
         path: artifacts
-    - run: dotnet nuget push "artifacts\*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
