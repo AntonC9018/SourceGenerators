@@ -45,11 +45,23 @@ jobs:
         if-no-files-found: error
 
   # Publish the packages to GitHub packages
-  publish-nightlies-github:
+  publish-github:
     needs: [build-packages]
     runs-on: ubuntu-latest
     #if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
     if: ${{github.event_name == 'push'}}
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: nuget_packages
+        path: artifacts
+    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+  # Publish the packages to GitHub packages
+  publish-nuget:
+    needs: [build-packages]
+    runs-on: ubuntu-latest
+    if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
     steps:
     - uses: actions/download-artifact@v4
       with:
