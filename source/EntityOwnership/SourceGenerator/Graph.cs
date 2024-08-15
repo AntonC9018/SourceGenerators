@@ -36,7 +36,10 @@ internal class Graph
             IPropertySymbol? GetPropertyOrNull(string? name)
             {
                 if (name is null)
+                {
                     return null;
+                }
+
                 return type
                     .GetMembersEvenIfUnimplemented(name)
                     .OfType<IPropertySymbol>()
@@ -105,7 +108,9 @@ internal class Graph
             foreach (var graphNode in graphNodes)
             {
                 if (graphNode.Cycle is null)
+                {
                     Recurse(graphNode);
+                }
 
                 cycle.Clear();
                 orderedCycle.Clear();
@@ -135,7 +140,9 @@ internal class Graph
                     orderedCycle.Add(node);
 
                     if (node.OwnerNode is { } owner)
+                    {
                         Recurse(owner);
+                    }
                 }
             }
         }
@@ -144,18 +151,29 @@ internal class Graph
             foreach (var graphNode in graphNodes)
             {
                 if (graphNode.Cycle is null)
+                {
                     SetRootOwner(graphNode);
+                }
             }
 
             void SetRootOwner(GraphNode node)
             {
                 if (node.RootOwnerNode is not null)
+                {
                     return;
+                }
+
                 if (node.OwnerNode is not { } owner)
+                {
                     return;
+                }
+
                 // Could happen if something went wrong previously
                 if (ReferenceEquals(owner, node))
+                {
                     return;
+                }
+
                 SetRootOwner(owner);
                 node.RootOwnerNode = owner.RootOwnerNode ?? owner;
             }
@@ -198,7 +216,10 @@ internal class GraphNode
     public override bool Equals(object? other)
     {
         if (other is not GraphNode otherNode)
+        {
             return false;
+        }
+
         return otherNode.Type.Equals(Type, SymbolEqualityComparer.Default);
     }
 
@@ -219,10 +240,14 @@ internal static class GraphNodeExtensions
             Debug.Assert(child.Cycle is null);
 
             foreach (var descendant in GetAllDependentNodesDepthFirst(child))
+            {
                 yield return descendant;
+            }
         }
 
         foreach (var child in node.DirectChildren)
+        {
             yield return child;
+        }
     }
 }

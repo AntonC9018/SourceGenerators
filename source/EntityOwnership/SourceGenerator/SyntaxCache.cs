@@ -43,11 +43,17 @@ internal record NodeSyntaxCache(
         string? fullyQualifiedIdTypeName;
         {
             if (node.IdProperty is { } idProperty)
+            {
                 fullyQualifiedIdTypeName = idProperty.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
             else if (node.Source.Type.Id is { } id)
+            {
                 fullyQualifiedIdTypeName = id.Type.FullyQualifiedName;
+            }
             else
+            {
                 fullyQualifiedIdTypeName = null;
+            }
         }
         string metadataName = node.Source.Type.TypeMetadataName;
         // NOTE: parsing the metadata here should be fine, since we only consider concrete types, not generic ones.
@@ -115,7 +121,10 @@ public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
         }
 
         if (IsInUse)
+        {
             Throw();
+        }
+
         IsInUse = true;
         return this;
     }
@@ -129,7 +138,10 @@ public sealed class BorrowableList<T> : IEnumerable<T>, IDisposable
         }
 
         if (!IsInUse)
+        {
             Throw();
+        }
+
         List.Add(item);
     }
     public IEnumerator<T> GetEnumerator() => List.GetEnumerator();

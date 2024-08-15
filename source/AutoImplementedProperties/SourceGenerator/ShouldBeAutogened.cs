@@ -35,10 +35,14 @@ public static class ShouldBeAutogened
     {
         Func<SyntaxNode, CancellationToken, bool> filter;
         if (additionalSyntaxFilter == null)
+        {
             filter = (node, token) => node is TypeDeclarationSyntax;
+        }
         else
+        {
             filter = (node, token) => node is TypeDeclarationSyntax
-                                      && additionalSyntaxFilter(node, token);
+                && additionalSyntaxFilter(node, token);
+        }
 
         return syntaxProvider.ForAttributeWithMetadataName(
             typeof(AutoImplementPropertiesAttribute).FullName
