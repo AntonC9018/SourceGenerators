@@ -17,29 +17,6 @@ env:
   EXCLUDE_SUFFIX_FROM_VERSION: false
 
 jobs:
-
-  build-solution:
-    if: >-
-      github.event_name == 'push' ||
-      github.event.pull_request.user.login != github.repository_owner
-    strategy:
-      matrix:
-        configuration: [Debug, Release]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v4
-    - name: Setup dotnet
-      uses: actions/setup-dotnet@v4
-    - name: Build
-      run: dotnet restore sln.sln --configuration=${{matrix.configuration}} -bl
-    - name: Upload MSBuild binary log
-      uses: actions/upload-artifact@v4
-      with:
-        name: msbuild_log_${{matrix.configuration}}
-        path: msbuild.binlog
-        if-no-files-found: error
-
   # Pack all projects with dotnet/MSBuild to generate NuGet packages.
   # This workflow also uploads the resulting packages as artifacts.
   build-packages:
@@ -69,6 +46,7 @@ jobs:
 
   # Publish the packages to GitHub packages
   publish-nightlies-github:
+    needs: [build-packages]
     runs-on: ubuntu-latest
     if: ${{github.event_name == 'push'}}
     steps:
