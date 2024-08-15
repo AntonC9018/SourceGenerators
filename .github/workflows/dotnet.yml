@@ -32,9 +32,9 @@ jobs:
     - name: Build Utils.Shared
       run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.Shared
-      run: dotnet pack source/PropertyCacheHelper.Shared/PropertyCacheHelper.Shared.csproj -c Release
+      run: dotnet pack source/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.SourceGenerator
-      run: dotnet pack source/PropertyCacheHelper.SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj -c Release
+      run: dotnet pack source/PropertyCacheHelper/SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj -c Release
 
       # Upload the packages to the pipeline artifacts
     - name: Upload package artifacts
