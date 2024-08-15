@@ -2,7 +2,13 @@
     <PropertyGroup>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <DebugType>embedded</DebugType>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
+
+    <!-- Needed for deterministic builds -->
+    <ItemGroup>
+        <SourceRoot Include="$(MSBuildThisFileDirectory)..\"/>
+    </ItemGroup>
 
     <PropertyGroup Label="Nuget info">
         <ContinuousIntegrationBuild Condition="'$(GITHUB_RUN_ID)' != ''">true</ContinuousIntegrationBuild>
@@ -17,7 +23,11 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
         <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
+
+        <_ReadmePath>$(MSBuildProjectDirectory)\README.md</_ReadmePath>
+        <PackageReadmeFile Condition="Exists(_ReadmePath)">$(_ReadmePath)</PackageReadmeFile>
+        <PackageReadmeFile Condition="!Exists(_ReadmePath)">$(SourceRoot)README.md</PackageReadmeFile>
+
         <PackageTags>sourcegenerator</PackageTags>
 
         <!--
@@ -31,9 +41,16 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
-    <!-- Needed for deterministic builds -->
+    <!-- Centralized location for all generated artifacts -->
+    <PropertyGroup>
+        <PackageOutputPath>$(MSBuildThisFileDirectory)..\artifacts\</PackageOutputPath>
+    </PropertyGroup>
+
     <ItemGroup>
-        <SourceRoot Include="$(MSBuildThisFileDirectory)..\"/>
+        <None Include="$(_ReadmePath)">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
     </ItemGroup>
 
     <!--
