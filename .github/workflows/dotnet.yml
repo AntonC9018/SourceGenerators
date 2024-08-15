@@ -48,6 +48,7 @@ jobs:
   publish-nightlies-github:
     needs: [build-packages]
     runs-on: ubuntu-latest
+    #if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
     if: ${{github.event_name == 'push'}}
     steps:
     - uses: actions/download-artifact@v4
