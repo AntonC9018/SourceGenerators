@@ -32,7 +32,7 @@ jobs:
     - name: Setup dotnet
       uses: actions/setup-dotnet@v4
     - name: Build
-      run: dotnet restore sln.sln --configuration=${{matrix.configuration}} /bl
+      run: dotnet restore sln.sln --configuration=${{matrix.configuration}} -bl
     - name: Upload MSBuild binary log
       uses: actions/upload-artifact@v4
       with:
