@@ -35,10 +35,6 @@
         Condition="'$(IsSourceGenerator)' == 'true'"
         Project="NetStandard\Include.targets"
         Label="Shared" />
-    <Import
-        Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="ConsumerShared\Include.targets"
-        Label="Shared" />
 
     <ItemGroup Condition="($(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared')">
         <ProjectReference Include="$(MSBuildThisFileDirectory)Utils.Shared\Utils.Shared.csproj" />

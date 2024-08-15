@@ -3,13 +3,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using AutoImplementedProperties.Attributes;
-using ConsumerShared;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SourceGeneration.Extensions;
+using Utils.Shared;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AutoImplementedProperties.SourceGenerator;
