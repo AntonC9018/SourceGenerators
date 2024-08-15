@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Manually set the version if null. This is copied from Microsoft.NET.DefaultAssemblyInfo.targets and is needed
+    for cases where that target is not being automatically imported (which happens because MSBuild is used instead
+    of dotnet build for some cases, due to the solution having some WinUI 3 projects). The lines setting the prefix
+    have been omitted, as that is already handled in the root .props file.
+  -->
+  <PropertyGroup Condition="'$(Version)' == ''">
+    <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>
+    <Version Condition="'$(Version)' == ''">$(VersionPrefix)</Version>
+  </PropertyGroup>
+
+  <!-- Set the base package version (this applies to all build types) -->
+  <PropertyGroup>
+    <PackageVersion>$(Version)</PackageVersion>
+  </PropertyGroup>
+
+  <!-- Settings that are only set for CI builds -->
+  <PropertyGroup Condition="'$(GITHUB_RUN_ID)' != ''">
+    <PackageVersion Condition="'$(EXCLUDE_RUN_ID_FROM_PACKAGE)' != 'true' AND '$(IsCommitOnReleaseBranch)' != true">$(Version).$(GITHUB_RUN_ID)</PackageVersion>
+    <PackageVersion Condition="'$(GITHUB_SHA)' != ''">$(PackageVersion)+$(GITHUB_SHA)</PackageVersion>
+  </PropertyGroup>
+</Project>
