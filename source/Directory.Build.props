@@ -1,13 +1,14 @@
 <Project>
     <PropertyGroup>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <LangVersion>12.0</LangVersion>
         <Nullable>enable</Nullable>
+        <LangVersion>12.0</LangVersion>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(IsSourceGenerator)' == '' and $(MSBuildProjectName.EndsWith('.SourceGenerator'))">
-        <IsSourceGenerator>true</IsSourceGenerator>
+    <PropertyGroup>
+        <IsSourceGenerator>false</IsSourceGenerator>
+        <IsSourceGenerator Condition="$(MSBuildProjectName.EndsWith('.SourceGenerator'))">true</IsSourceGenerator>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
@@ -21,8 +22,26 @@
         <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(IsTests)' == '' and $(MSBuildProjectName.EndsWith('.Tests'))">
-        <IsTests>true</IsTests>
+    <PropertyGroup>
+        <IsTests>false</IsTests>
+        <IsTests Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTests>
+    </PropertyGroup>
+    <PropertyGroup>
+        <IsAnalyzers>false</IsAnalyzers>
+        <IsAnalyzers Condition="$(MSBuildProjectName.EndsWith('.Analyzers'))">true</IsAnalyzers>
+    </PropertyGroup>
+    <PropertyGroup>
+        <IsCodeFixes>false</IsCodeFixes>
+        <IsCodeFixes Condition="$(MSBuildProjectName.EndsWith('.CodeFixes'))">true</IsCodeFixes>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!-- Disable doc comment error -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
+        <NoWarn>$(NoWarn);NU5128</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(IsTests)' == 'true'">
@@ -42,8 +61,13 @@
         <NoWarn>$(NoWarn);CS0618</NoWarn>
     </PropertyGroup>
 
-    <!-- Configure PolySharp options -->
     <PropertyGroup>
         <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
     </PropertyGroup>
+
+    <PropertyGroup>
+        <AssemblyName>Anton.$(MSBuildProjectName)</AssemblyName>
+    </PropertyGroup>
+
+    <Import Project="..\build\Directory.Build.props" />
 </Project>

@@ -1,12 +1,10 @@
 using System.Threading.Tasks;
 using AutoImplementedProperties.Attributes;
 using AutoImplementedProperties.SourceGenerator;
-using VerifyXunit;
 using Xunit;
 
 namespace AutoImplementedProperties.Tests;
 
-[UsesVerify]
 public class Tests
 {
     private readonly TestHelper<AutoImplementedPropertyGenerator> _helper = new(

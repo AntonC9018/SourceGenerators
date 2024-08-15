@@ -46,7 +46,9 @@ public static class OwnershipModelHelper
             .FirstOrDefault(i => i.Equals(iownerInterface, SymbolEqualityComparer.Default));
 
         if (iownedImplementation is null && iownerImplementation is null)
+        {
             return null;
+        }
 
         OwnershipEntityTypeInfo.IdAndTypeInfo typeInfo;
         {

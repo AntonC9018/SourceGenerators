@@ -3,13 +3,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using AutoImplementedProperties.Attributes;
-using ConsumerShared;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SourceGeneration.Extensions;
+using Utils.Shared;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace AutoImplementedProperties.SourceGenerator;
@@ -78,7 +78,9 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
         foreach (var p in allProperties)
         {
             if (p.GetMethod is null || p.SetMethod is null)
+            {
                 continue;
+            }
 
             if (p is { ExplicitInterfaceImplementations: [{ } explicitImpl] })
             {
@@ -113,7 +115,9 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
                 while (enumerator.MoveNext())
                 {
                     if (enumerator.Current!.Type.Equals(firstType, SymbolEqualityComparer.IncludeNullability))
+                    {
                         continue;
+                    }
 
                     shouldGenerateOverloads = true;
                     break;
@@ -180,7 +184,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
                     AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
                         .WithSemicolonToken(Token(SyntaxKind.SemicolonToken)),
                     AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
-                        .WithSemicolonToken(Token(SyntaxKind.SemicolonToken))
+                        .WithSemicolonToken(Token(SyntaxKind.SemicolonToken)),
                 })));
             return propertyDeclaration;
         }

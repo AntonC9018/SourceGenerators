@@ -1,6 +1,6 @@
 using System;
 
-namespace ConsumerShared;
+namespace Utils.Shared;
 
 /// <summary>
 /// Indicates that all properties of the interface will be auto-implemented,

@@ -45,6 +45,7 @@ internal sealed partial record HierarchyInfo(string FullyQualifiedMetadataName, 
     /// Creates a <see cref="CompilationUnitSyntax"/> instance for the current hierarchy.
     /// </summary>
     /// <param name="memberDeclarations">The member declarations to add to the generated type.</param>
+    /// <param name="nullableEnable"></param>
     /// <returns>A <see cref="CompilationUnitSyntax"/> instance for the current hierarchy.</returns>
     public CompilationUnitSyntax GetSyntax(
         MemberDeclarationSyntax[] memberDeclarations,

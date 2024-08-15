@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Linq;
-using ConsumerShared;
+using Utils.Shared;
 
 namespace EntityOwnership;
 

@@ -1,13 +1,10 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using AutoImplementedProperties.Tests;
 using EntityOwnership.SourceGenerator;
-using VerifyXunit;
 using Xunit;
 
 namespace EntityOwnership.Tests;
 
-[UsesVerify]
 public class Tests
 {
     private readonly TestHelper<EntityOwnershipSourceGenerator> _helper = new(

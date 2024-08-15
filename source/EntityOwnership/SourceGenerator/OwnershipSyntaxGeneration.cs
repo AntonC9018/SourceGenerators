@@ -6,9 +6,10 @@ using AutoConstructor.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using SourceGeneration.Extensions;
 using SourceGeneration.Models;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
-using static EntityOwnership.SourceGenerator.SyntaxFactoryHelper;
+using static SourceGeneration.Extensions.SyntaxFactoryHelper;
 
 namespace EntityOwnership.SourceGenerator;
 
@@ -27,7 +28,10 @@ internal static class OwnershipSyntaxHelper
             // e.Owner.Id
             var ownerIdProperty = graphNode.OwnerNode!.OwnerIdProperty;
             if (ownerIdProperty is null)
+            {
                 return null;
+            }
+
             var navigationAccess = PropertyAccess(
                 parent,
                 ownerNavigation);
@@ -42,7 +46,9 @@ internal static class OwnershipSyntaxHelper
         Graph graph, NameSyntax generatedNamespace)
     {
         foreach (var graphNode in graph.Nodes)
+        {
             graphNode.SyntaxCache = NodeSyntaxCache.Create(graphNode);
+        }
 
         var cache = SyntaxGenerationCache.Instance.Value;
         var members = new List<MemberDeclarationSyntax>();
@@ -113,7 +119,9 @@ internal static class OwnershipSyntaxHelper
             ExpressionSyntax? lhsExpression = graphNode.GetOwnerIdExpression(
                 IdentifierName(parameter.Identifier));
             if (lhsExpression is null)
+            {
                 continue;
+            }
 
             // e => e.OwnerId == ownerId
             var lambda = EqualsCheckLambda(
@@ -146,9 +154,14 @@ internal static class OwnershipSyntaxHelper
         foreach (var graphNode in graph.Nodes)
         {
             if (graphNode.Cycle is not null)
+            {
                 continue;
+            }
+
             if (graphNode.SyntaxCache is not { } syntaxCache)
+            {
                 continue;
+            }
 
             using var parameters = cache.Parameters.Borrow();
             parameters.Add(syntaxCache.QueryParameter);
@@ -157,12 +170,18 @@ internal static class OwnershipSyntaxHelper
             // we have to check its own id.
             MethodDeclarationSyntax? method;
             if (graphNode.OwnerNode is not { } ownerNode)
+            {
                 method = GetMethod_SelfIsRoot(graphNode, syntaxCache, parameters);
+            }
             else
+            {
                 method = GetMethod_RegularOwnerIdChecks(graphNode, ownerNode, syntaxCache, parameters);
+            }
 
             if (method is null)
+            {
                 continue;
+            }
 
             outResult.Add(method);
             syntaxCache.RootOwnerMethod = method;
@@ -172,9 +191,14 @@ internal static class OwnershipSyntaxHelper
             NodeSyntaxCache syntaxCache, BorrowableList<ParameterSyntax> parameters)
         {
             if (graphNode.IdProperty is not { } idProperty)
+            {
                 return null;
+            }
+
             if (syntaxCache.IdParameter is not { } idParameter)
+            {
                 return null;
+            }
 
             parameters.Add(idParameter);
             var method = FluentExtensionMethod(
@@ -216,7 +240,9 @@ internal static class OwnershipSyntaxHelper
             if (ReferenceEquals(ownerNode, rootOwnerNode))
             {
                 if (syntaxCache.DirectOwnerMethod is not { } directOwnerMethod)
+                {
                     return null;
+                }
 
                 // Just call the root filter:
                 // return DirectOwnerFilter(query, ownerId);
@@ -231,7 +257,9 @@ internal static class OwnershipSyntaxHelper
             var memberAccessChain = PropertyAccess(parentExpression, ownerNavigation);
 
             if (!CompleteMemberAccessChain())
+            {
                 return null;
+            }
 
             // return query.Where(e => e.Owner...)
             var lambda = EqualsCheckLambda(
@@ -253,9 +281,14 @@ internal static class OwnershipSyntaxHelper
                 while (true)
                 {
                     if (nodeOwner.OwnerNode is not { } potentialRoot)
+                    {
                         break;
+                    }
+
                     if (node.OwnerNavigation is not { } ownerOwnerNavigation)
+                    {
                         return false;
+                    }
 
                     node = nodeOwner;
                     nodeOwner = potentialRoot;
@@ -360,7 +393,7 @@ internal static class OwnershipSyntaxHelper
             {
                 0 => StaticSyntaxCache.DirectOwnerFilterIdentifier,
                 1 => StaticSyntaxCache.RootOwnerFilterIdentifier,
-                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
+                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
             };
             var methodToCall = MethodAccess(
                 StaticSyntaxCache.OverloadsClassIdentifier, methodToCallIdentifier);
@@ -369,7 +402,10 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
+
                 if (methodIndex switch
                     {
                         0 => syntaxCache.DirectOwnerMethod,
@@ -387,7 +423,9 @@ internal static class OwnershipSyntaxHelper
                     _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
                 };
                 if (ownerNode?.SyntaxCache?.IdType is not { } ownerIdType)
+                {
                     continue;
+                }
 
                 var branch = genericContext.CreateBranch(
                     cache, methodToCall, syntaxCache, ownerIdType);
@@ -400,7 +438,7 @@ internal static class OwnershipSyntaxHelper
             {
                 0 => StaticSyntaxCache.DirectOwnerFilterTIdentifier,
                 1 => StaticSyntaxCache.RootOwnerFilterTIdentifier,
-                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex))
+                _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
             };
 
             var method = genericContext.CreateQueryMethod(cache, methodName)
@@ -436,9 +474,14 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
+
                 if (graphNode.Cycle is not null)
+                {
                     continue;
+                }
 
                 using var statements2 = cache.Statements2.Borrow();
                 var startExpression = IdentifierName(syntaxCache.LambdaParameter.Identifier);
@@ -446,7 +489,9 @@ internal static class OwnershipSyntaxHelper
                 foreach (var (ownerNode, idAccess, _) in GetIdNavigations(startExpression, graphNode))
                 {
                     if (ownerNode.SyntaxCache is not { IdType: { } ownerIdType } ownerSyntaxCache)
+                    {
                         continue;
+                    }
 
                     // if (typeof(TOwner) == typeof(Entity1Owner1))
                     var typeCheck = BinaryExpression(
@@ -521,7 +566,9 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
 
                 var startExpression = IdentifierName(syntaxCache.LambdaParameter.Identifier);
                 var idNavigations = GetIdNavigations(startExpression, graphNode);
@@ -529,9 +576,14 @@ internal static class OwnershipSyntaxHelper
                 foreach (var idNavigation in idNavigations)
                 {
                     if (idNavigation.OwnerNode.SyntaxCache is not { } ownerSyntaxCache)
+                    {
                         continue;
+                    }
+
                     if (ownerSyntaxCache.IdType is not { } ownerIdType)
+                    {
                         continue;
+                    }
 
                     // private static readonly Expression<Func<...>> name = x => x.Navigation.Id;
                     AddAccessThing(
@@ -623,10 +675,12 @@ internal static class OwnershipSyntaxHelper
                 var idAccess = graphNode.GetOwnerIdExpression(
                     IdentifierName(castedEntityVariable));
                 if (idAccess is null)
+                {
                     continue;
+                }
 
                 // var id = Coerce<T, int>(ownerId);
-                var coercedId = genericContext.IdDeclaration(cache, ownerIdType);
+                var coercedId = genericContext.IdDeclaration(cache, ownerIdType!);
 
                 // castedEntity.OwnerId = ownerId
                 var idAssignment = AssignmentExpression(
@@ -698,7 +752,9 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
 
                 using var statements2 = cache.Statements2.Borrow();
 
@@ -775,9 +831,14 @@ internal static class OwnershipSyntaxHelper
         ExpressionSyntax start, GraphNode leaf)
     {
         if (leaf.IdProperty is { } leafIdProperty)
+        {
             yield return new(leaf, PropertyAccess(start, leafIdProperty), start);
+        }
+
         if (leaf.OwnerNode is not { } ownerNode)
+        {
             yield break;
+        }
 
         GraphNode node = leaf;
         var chainToNode = start;
@@ -785,24 +846,36 @@ internal static class OwnershipSyntaxHelper
         while (true)
         {
             if (ownerNode.OwnerNode is not { } nextOwnerNode)
+            {
                 break;
+            }
 
             ExpressionSyntax? chainToParent = null;
             if (node.OwnerNavigation is { } ownerNavigation)
+            {
                 chainToParent = PropertyAccess(chainToNode, ownerNavigation);
+            }
 
             ExpressionSyntax ownerIdAccess;
             if (node.OwnerIdProperty is { } ownerIProperty)
+            {
                 ownerIdAccess = PropertyAccess(chainToNode, ownerIProperty);
+            }
             else if (chainToParent is not null)
+            {
                 ownerIdAccess = PropertyAccess(chainToParent, ownerNode.IdProperty!);
+            }
             else
+            {
                 yield break;
+            }
 
             yield return new(ownerNode, ownerIdAccess, chainToParent);
 
             if (chainToParent is null)
+            {
                 yield break;
+            }
 
             node = ownerNode;
             ownerNode = nextOwnerNode;
@@ -813,7 +886,10 @@ internal static class OwnershipSyntaxHelper
         {
             ExpressionSyntax? ownerNavigationExpression = null;
             if (node.OwnerNavigation is { } ownerNavigation)
+            {
                 ownerNavigationExpression = PropertyAccess(chainToNode, ownerNavigation);
+            }
+
             yield return new(ownerNode, idAccess, ownerNavigationExpression);
         }
     }
@@ -869,7 +945,9 @@ internal static class OwnershipSyntaxHelper
         foreach (var graphNode in graph.Nodes)
         {
             if (graphNode.SyntaxCache is { } syntaxCache)
+            {
                 syntaxCache.EntityTypeCheck = EntityTypeCheck(syntaxCache.EntityType);
+            }
 
             BinaryExpressionSyntax EntityTypeCheck(TypeSyntax otherType)
             {
@@ -900,7 +978,10 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
+
                 var xOwner = methodIndex switch
                 {
                     0 => graphNode.OwnerNode,
@@ -908,7 +989,9 @@ internal static class OwnershipSyntaxHelper
                     _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
                 };
                 if (xOwner?.SyntaxCache is not { } ownerSyntaxCache)
+                {
                     continue;
+                }
 
                 var typeCheck = syntaxCache.EntityTypeCheck!;
                 var returnIdType = ReturnStatement(
@@ -939,7 +1022,10 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { IdType: { } idType } syntaxCache)
+                {
                     continue;
+                }
+
                 var typeCheck = BinaryExpression(
                     SyntaxKind.EqualsExpression,
                     IdentifierName("entityType"),
@@ -968,7 +1054,10 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
+
                 var targetMethod = methodIndex switch
                 {
                     0 => syntaxCache.DirectOwnerMethod,
@@ -976,7 +1065,9 @@ internal static class OwnershipSyntaxHelper
                     _ => throw new ArgumentOutOfRangeException(nameof(methodIndex)),
                 };
                 if (targetMethod is null)
+                {
                     continue;
+                }
 
                 var typeCheck = syntaxCache.EntityTypeCheck!;
                 var ifStatement = IfStatement(typeCheck, ReturnTrue);
@@ -1018,7 +1109,10 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.Cycle is not null)
+                {
                     continue;
+                }
+
                 using var statements2 = cache.Statements2.Borrow();
                 var node = graphNode;
                 do
@@ -1043,7 +1137,10 @@ internal static class OwnershipSyntaxHelper
 
                 {
                     if (graphNode.SyntaxCache is not { } syntaxCache)
+                    {
                         continue;
+                    }
+
                     // if (entityType == typeof(EntityType))
                     var typeCheck = BinaryExpression(
                         SyntaxKind.EqualsExpression,
@@ -1089,9 +1186,14 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.Cycle is not null)
+                {
                     continue;
+                }
+
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
 
                 var dependentTypesArrayName = syntaxCache.GetDependentTypesArrayName();
                 var dependentNodes = graphNode.GetAllDependentNodesDepthFirst();
@@ -1100,7 +1202,10 @@ internal static class OwnershipSyntaxHelper
                 foreach (var node in dependentNodes)
                 {
                     if (node.SyntaxCache is not { } childSyntaxCache)
+                    {
                         continue;
+                    }
+
                     typeExpressions.Add(
                         TypeOfExpression(childSyntaxCache.EntityType));
                 }
@@ -1134,9 +1239,14 @@ internal static class OwnershipSyntaxHelper
             foreach (var graphNode in graph.Nodes)
             {
                 if (graphNode.Cycle is not null)
+                {
                     continue;
+                }
+
                 if (graphNode.SyntaxCache is not { } syntaxCache)
+                {
                     continue;
+                }
 
                 // if (typeof(TOwnerType) == typeof(EntityType))
                 var typeCheck = BinaryExpression(

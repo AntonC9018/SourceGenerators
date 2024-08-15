@@ -1,0 +1,85 @@
+<Project>
+    <PropertyGroup>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>embedded</DebugType>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+
+    <!-- Needed for deterministic builds -->
+    <ItemGroup>
+        <SourceRoot Include="$(MSBuildThisFileDirectory)..\"/>
+    </ItemGroup>
+
+    <PropertyGroup Label="Nuget info">
+        <ContinuousIntegrationBuild Condition="'$(GITHUB_RUN_ID)' != ''">true</ContinuousIntegrationBuild>
+        <PackageId>$(AssemblyName)</PackageId>
+        <Title>$(AssemblyName)</Title>
+        <RepositoryUrl>https://github.com/AntonC9018/SourceGenerators</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <ProjectUrl>$(RepositoryUrl)</ProjectUrl>
+        <Authors>Anton Curmanschii</Authors>
+        <Copyright>Copyright (c) 2024 Flowqe Inc.</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+        <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+
+        <_ReadmePath>$(MSBuildProjectDirectory)\README.md</_ReadmePath>
+        <PackageReadmeFile Condition="Exists(_ReadmePath)">$(_ReadmePath)</PackageReadmeFile>
+        <PackageReadmeFile Condition="!Exists(_ReadmePath)">$(SourceRoot)README.md</PackageReadmeFile>
+
+        <PackageTags>sourcegenerator</PackageTags>
+
+        <!--
+          Generate documentation files. In theory this should only be abled for published, non source generator projects.
+          However, this is always enabled to work around https://github.com/dotnet/roslyn/issues/41640. Until that's fixed,
+          source generators will also produce an .xml file with their documentation. Note that this doesn't really impact
+          NuGet packages, since the analyzer binaries are packed manually after build, so the .xml files aren't included.
+          When this workaround is no longer needed, the same property should also removed for the \samples directory.
+          Once that issue is fixed, this should be moved down to the src\ specific .props file again, and otherwise disabled.
+        -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <!-- Centralized location for all generated artifacts -->
+    <PropertyGroup>
+        <PackageOutputPath>$(MSBuildThisFileDirectory)..\artifacts\</PackageOutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(_ReadmePath)">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
+    </ItemGroup>
+
+    <!--
+      Setup properties to filter properties based on their location and name. These are needed to decide when to
+      enable assembly strong name signing. We only want to enable it for published projects and for internal test
+      projects (as InternalsVisibleTo also needs a strong name if the source assembly has a strong name). But, we
+      don't want to enable it for all projects, as some test and sample projects have NuGet dependencies to packages
+      which are not strongly named, and as such would not compile.
+    -->
+    <PropertyGroup>
+        <ProjectDirectoryPathFromSourceRoot>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)..\', $(MSBuildProjectDirectory)))</ProjectDirectoryPathFromSourceRoot>
+        <ProjectDirectoryWithSlashes>$(ProjectDirectoryPathFromSourceRoot.Replace('\', '/'))</ProjectDirectoryWithSlashes>
+        <IsPublishedProject>false</IsPublishedProject>
+        <IsPublishedProject Condition="$(ProjectDirectoryWithSlashes.StartsWith('source/')) AND '$(IsTests)' == 'false'">true</IsPublishedProject>
+        <IsPackagedProject>false</IsPackagedProject>
+        <IsPackagedProject Condition="'$(IsPublishedProject)' == 'true' AND '$(IsAnalyzersProject)' == 'false'">true</IsPackagedProject>
+        <IsTestProject>$(ProjectDirectoryWithSlashes.StartsWith('tests/'))</IsTestProject>
+        <IsInternalsTestProject>false</IsInternalsTestProject>
+        <IsInternalsTestProject Condition="$(IsTestProject) AND $(MSBuildProjectName.EndsWith('.Internals'))">true</IsInternalsTestProject>
+    </PropertyGroup>
+
+    <!-- Enable strong name signing when needed (see notes above) -->
+    <PropertyGroup Condition="$(IsPublishedProject) OR $(IsInternalsTestProject)">
+        <SignAssembly>true</SignAssembly>
+        <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\sourcegenerators.snk</AssemblyOriginatorKeyFile>
+        <AssemblySignPublicKey>0024000004800000940000000602000000240000525341310004000001000100897BA2C6C075C4EDABA776EFC8A0A28F3327A3807D752582092FDD913249D3216766AF915A7D2010E2E84337493F5D0EC424C569D6CB3284BAA63138C483152BAD0DB12A</AssemblySignPublicKey>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(GITHUB_EVENT_NAME)' == 'push' AND '$(GITHUB_REF_NAME)' == 'master'">
+        <IsCommitOnReleaseBranch>true</IsCommitOnReleaseBranch>
+    </PropertyGroup>
+</Project>
