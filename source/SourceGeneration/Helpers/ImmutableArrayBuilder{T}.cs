@@ -47,7 +47,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     /// <summary>
     /// Gets the data written to the underlying buffer so far, as a <see cref="ReadOnlySpan{T}"/>.
     /// </summary>
-    public readonly ReadOnlySpan<T> WrittenSpan
+    public readonly Span<T> WrittenSpan
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => writer!.WrittenSpan;
@@ -122,6 +122,11 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         }
     }
 
+    public void Clear()
+    {
+        writer!.Clear();
+    }
+
     /// <summary>
     /// A class handling the actual buffer writing.
     /// </summary>
@@ -155,7 +160,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.WrittenSpan"/>
-        public ReadOnlySpan<T> WrittenSpan
+        public Span<T> WrittenSpan
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => new(array, 0, index);

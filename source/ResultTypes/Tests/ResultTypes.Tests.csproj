@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <ProjectReference Include="..\SourceGenerator\PropertyCacheHelper.SourceGenerator.csproj"/>
+    </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Snapshots\" />
+    </ItemGroup>
+</Project>
