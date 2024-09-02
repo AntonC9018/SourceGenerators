@@ -6,9 +6,9 @@
     </PropertyGroup>
 
     <!-- Needed for deterministic builds -->
-    <ItemGroup>
-        <SourceRoot Include="$(MSBuildThisFileDirectory)..\"/>
-    </ItemGroup>
+    <PropertyGroup>
+        <SourceRoot>$(MSBuildThisFileDirectory)..\</SourceRoot>
+    </PropertyGroup>
 
     <PropertyGroup Label="Nuget info">
         <ContinuousIntegrationBuild Condition="'$(GITHUB_RUN_ID)' != ''">true</ContinuousIntegrationBuild>
@@ -25,8 +25,9 @@
         <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
 
         <_ReadmePath>$(MSBuildProjectDirectory)\README.md</_ReadmePath>
-        <PackageReadmeFile Condition="Exists(_ReadmePath)">$(_ReadmePath)</PackageReadmeFile>
-        <PackageReadmeFile Condition="!Exists(_ReadmePath)">$(SourceRoot)README.md</PackageReadmeFile>
+        <_ReadmePath Condition="!Exists('$(_ReadmePath)')">$(SourceRoot)README.md</_ReadmePath>
+
+        <PackageReadmeFile>README.md</PackageReadmeFile>
 
         <PackageTags>sourcegenerator</PackageTags>
 
