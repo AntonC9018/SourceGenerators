@@ -31,14 +31,21 @@ jobs:
       uses: actions/setup-dotnet@v4
     - name: Build Utils.Shared
       run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
+
     - name: Build PropertyCacheHelper.Shared
       run: dotnet pack source/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj -c Release
     - name: Build PropertyCacheHelper.SourceGenerator
       run: dotnet pack source/PropertyCacheHelper/SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj -c Release
+
     - name: Build AutoImplementedProperties.Shared
       run: dotnet pack source/AutoImplementedProperties/Shared/AutoImplementedProperties.Shared.csproj -c Release
     - name: Build AutoImplementedProperties.SourceGenerator
-      run: dotnet pack source/AutoImplementedProperties/SourceGenerator/AutoImplementedProperties.SourceGenerator.csproj -c Release
+      run: dotnet pack source/AutoConstructor/SourceGenerator/AutoConstructor.SourceGenerator.csproj -c Release
+
+    - name: Build AutoConstructor.Shared
+      run: dotnet pack source/AutoConstructor/Shared/AutoConstructor.Shared.csproj -c Release
+    - name: Build AutoConstructor.SourceGenerator
+      run: dotnet pack source/AutoConstructor/SourceGenerator/AutoConstructor.SourceGenerator.csproj -c Release
 
       # Upload the packages to the pipeline artifacts
     - name: Upload package artifacts
