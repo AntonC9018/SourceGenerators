@@ -38,8 +38,7 @@
             Visible="false" />
 
         <ProjectReference
-            Include="$(UtilsSharedProject)"
-            PrivateAssets="all" />
+            Include="$(UtilsSharedProject)" />
 
         <None
             Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
@@ -50,8 +49,7 @@
         <!-- Same hack for the shared project of this sg, if it exists -->
         <ProjectReference
             Condition="Exists('$(OwnSharedProject)')"
-            Include="$(OwnSharedProject)"
-            PrivateAssets="all" />
+            Include="$(OwnSharedProject)" />
 
         <None
             Condition="Exists('$(OwnSharedProject)')"
