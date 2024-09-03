@@ -1,7 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\Shared\Include.targets" />
-  <Import Project="..\..\Utils.Shared\Include.targets" />
-  
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
