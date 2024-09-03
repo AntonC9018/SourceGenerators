@@ -18,7 +18,7 @@
         <PackageReference
             Include="Microsoft.CodeAnalysis.CSharp"
             Version="4.10.0"
-            PrivateAssets="all"/>
+            PrivateAssets="all" />
     </ItemGroup>
 
     <PropertyGroup>
@@ -38,30 +38,42 @@
             Visible="false" />
 
         <ProjectReference
-            Include="$(UtilsSharedProject)" />
-
+            Include="$(UtilsSharedProject)"
+            PrivateAssets="all" />
         <None
             Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false" />
+        <None
+            Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
+            Pack="true"
+            PackagePath="lib/netstandard2.0"
+            Visible="true" />
 
         <!-- Same hack for the shared project of this sg, if it exists -->
         <ProjectReference
             Condition="Exists('$(OwnSharedProject)')"
-            Include="$(OwnSharedProject)" />
-
+            Include="$(OwnSharedProject)"
+            PrivateAssets="all" />
         <None
             Condition="Exists('$(OwnSharedProject)')"
             Include="$(OutputPath)\$(AssemblyPrefix)$(ProjectBaseName).Shared.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false" />
+        <None
+            Condition="Exists('$(OwnSharedProject)')"
+            Include="$(OutputPath)\$(AssemblyPrefix)$(ProjectBaseName).Shared.dll"
+            Pack="true"
+            PackagePath="lib/netstandard2.0"
+            Visible="true" />
     </ItemGroup>
 
     <Import
         Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="$(MSBuildThisFileDirectory)SourceGeneration\Include.targets" />
+        Project="SourceGeneration\Include.targets"
+        Label="Shared" />
 
     <ItemGroup Condition="($(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared')">
         <ProjectReference Include="$(UtilsSharedProject)" />
