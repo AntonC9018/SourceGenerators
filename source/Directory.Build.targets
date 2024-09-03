@@ -19,9 +19,41 @@
             Include="Microsoft.CodeAnalysis.CSharp"
             Version="4.10.0"
             PrivateAssets="all"/>
+    </ItemGroup>
 
+    <PropertyGroup>
+        <UtilsSharedProject>$(MSBuildThisFileDirectory)Utils.Shared\Utils.Shared.csproj</UtilsSharedProject>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
+        <ProjectBaseName>$([System.String]::Copy($(MSBuildProjectName)).Substring(0, $([System.String]::Copy($(MSBuildProjectName)).IndexOf('.'))))</ProjectBaseName>
+        <OwnSharedProject>$(MSBuildProjectDirectory)\..\Shared\$(ProjectBaseName).Shared.csproj</OwnSharedProject>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(IsSourceGenerator)' == 'true'">
         <None
             Include="$(OutputPath)\$(AssemblyName).dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs"
+            Visible="false" />
+
+        <ProjectReference
+            Include="$(UtilsSharedProject)" />
+
+        <None
+            Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs"
+            Visible="false" />
+
+        <!-- Same hack for the shared project of this sg, if it exists -->
+        <ProjectReference
+            Condition="Exists('$(OwnSharedProject)')"
+            Include="$(OwnSharedProject)" />
+
+        <None
+            Condition="Exists('$(OwnSharedProject)')"
+            Include="$(OutputPath)\$(AssemblyPrefix)$(ProjectBaseName).Shared.dll"
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false" />
@@ -29,15 +61,10 @@
 
     <Import
         Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="SourceGeneration\Include.targets"
-        Label="Shared" />
-    <Import
-        Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="NetStandard\Include.targets"
-        Label="Shared" />
+        Project="$(MSBuildThisFileDirectory)SourceGeneration\Include.targets" />
 
     <ItemGroup Condition="($(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared')">
-        <ProjectReference Include="$(MSBuildThisFileDirectory)Utils.Shared\Utils.Shared.csproj" />
+        <ProjectReference Include="$(UtilsSharedProject)" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(IsTests)' == 'true'">

@@ -66,7 +66,8 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <AssemblyName>Anton.$(MSBuildProjectName)</AssemblyName>
+        <AssemblyPrefix>Anton.</AssemblyPrefix>
+        <AssemblyName Condition="'$(AssemblyName)' == ''">$(AssemblyPrefix)$(MSBuildProjectName)</AssemblyName>
     </PropertyGroup>
 
     <Import Project="..\build\Directory.Build.props" />
