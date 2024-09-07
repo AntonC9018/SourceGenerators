@@ -24,9 +24,14 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         IncrementalValuesProvider<Model> propertiesInfo = context.SyntaxProvider
             .ForGenerateResultTypesAttribute(static (context, ct) => CreateModel(context, ct));
 
-        IncrementalValuesProvider<string> config = context.SyntaxProvider
-            .ForResultBaseAttribute(static (c, _) => c.Attribute.ConstructorArguments.FirstOrDefault().Value as string)
-            .Where(static s => s is not null)!;
+        IncrementalValueProvider<string> resultBaseConfig = context.SyntaxProvider
+            .ForTypeParamOfAttributeWithName<ResultBaseAttribute>();
+
+        IncrementalValueProvider<string> wellKnownTypesConfig = context.SyntaxProvider
+            .ForWellKnownResultAttribute(static (c, _) => c.Attribute.ConstructorArguments.FirstOrDefault().Value as string);
+
+        IncrementalValueProvider<(string ResultBase, string WellKnownTypes)> config = resultBaseConfig
+            .Combine(wellKnownTypesConfig);
 
         context.RegisterSourceOutput(propertiesInfo, static (context, item) =>
         {
@@ -111,22 +116,6 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         return;
                     }
 
-                    ref OverloadBuilder FindOrAddOverloadWithoutExplicitResult(ref ResultSetsBuilder builder)
-                    {
-                        foreach (ref var r in builder.Values.WrittenSpan)
-                        {
-                            if (r.IsWithoutExplicitResult)
-                            {
-                                return ref r;
-                            }
-                        }
-                        builder.Values.Add(new()
-                        {
-                            Type = null,
-                        });
-                        return ref builder.Values.WrittenSpan[^1];
-                    }
-
                     switch (args)
                     {
                         case []:
@@ -134,81 +123,46 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             state.HasDefault = true;
                             break;
                         }
-                        case [{ Expression: ObjectCreationExpressionSyntax newTypeSyntax }]:
-                        {
-
-                            ref var defaultOverload = ref FindOrAddOverloadWithoutExplicitResult(ref state.ResultSets);
-                            Helper.HandleNew(new()
-                            {
-                                CancellationToken = cancellationToken,
-                                SemanticModel = context.SemanticModel,
-                                NewTypeSyntax = newTypeSyntax,
-                            }, ref defaultOverload.Properties);
-                            break;
-                        }
                         case [{ } x]:
                         {
-                            Helper.HandleConstant(new()
+                            var b = Helper.HandleConstant(new()
                             {
                                 Argument = x,
                                 CancellationToken = cancellationToken,
                                 SemanticModel = context.SemanticModel,
                             }, ref state.ResultSets);
-                            break;
-                        }
-                        case [{ } x, { Expression: ObjectCreationExpressionSyntax newTypeSyntax }]:
-                        {
-                            ref var overload = ref Helper.HandleConstant(new()
-                            {
-                                Argument = x,
-                                CancellationToken = cancellationToken,
-                                SemanticModel = context.SemanticModel,
-                            }, ref state.ResultSets);
-                            if (Unsafe.IsNullRef(ref overload))
+
+                            if (b is { })
                             {
                                 break;
                             }
-                            Helper.HandleNew(new()
+
+                            break;
+                        }
+                        case [{ } x, { Expression: { } newTypeSyntax }]:
+                        {
+                            var b = Helper.HandleConstant(new()
+                            {
+                                Argument = x,
+                                CancellationToken = cancellationToken,
+                                SemanticModel = context.SemanticModel,
+                            }, ref state.ResultSets);
+                            if (b is not { })
+                            {
+                                break;
+                            }
+
+                            Helper.HandleArgumentType(new()
                             {
                                 CancellationToken = cancellationToken,
                                 SemanticModel = context.SemanticModel,
                                 NewTypeSyntax = newTypeSyntax,
-                            }, ref overload.Properties);
+                            }, ref state.ResultSets);
+
                             break;
                         }
                     }
                 }
-            }
-
-            using var goodBuilder = ImmutableArrayBuilder<Model.MethodModel>.Rent();
-            foreach (var t in okState.ResultSets.Values.WrittenSpan)
-            {
-                using var properties = ImmutableArrayBuilder<Model.Property>.Rent();
-                foreach (var p in t.Properties.WrittenSpan)
-                {
-                    properties.Add(new()
-                    {
-                        Name = p.Name,
-                        Type = TypeSyntaxReference.From(p.Type),
-                    });
-                }
-
-                using var results = ImmutableArrayBuilder<Model.ResultSet>.Rent();
-                foreach (var r in t.)
-                {
-                    results.Add(new()
-                    {
-                        ProvidedConcreteValues = r.ProvidedConcreteValues.ToImmutable(),
-                        Type = TypeSyntaxReference.From(r.Type),
-                    });
-                }
-
-                goodBuilder.Add(new()
-                {
-                    Properties = properties.ToImmutable(),
-                    ParamsModelType = null,
-                    ResultSet =
-                });
             }
         }
         finally
@@ -217,9 +171,50 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             okState.Dispose();
         }
 
+        // It's not clear what to do with a default failure case?
+        // Maybe it should just create like a SomeFailure member?
+
+        INamespaceOrTypeSymbol containingOrNamespaceType = context.TargetSymbol.ContainingType;
+        if (returnType.Name != "Result")
+        {
+            containingOrNamespaceType = (INamespaceOrTypeSymbol) containingOrNamespaceType.ContainingType
+                ?? containingOrNamespaceType.ContainingNamespace;
+        }
+
+        using var good = ImmutableArrayBuilder<Model.MethodModel>.Rent();
+        foreach (var x in okState.ResultSets.Values.WrittenSpan)
+        {
+            using var acceptedTagValues = ImmutableArrayBuilder<string>.Rent();
+
+            if (x.Constants.Count > 0)
+            {
+                var members = x.TagType!.GetMembers().OfType<IFieldSymbol>().ToArray();
+
+                foreach (var y in x.Constants.WrittenSpan)
+                {
+                    // get members in x.TagType with const value y
+                    var member = members.FirstOrDefault(m => (int) m.ConstantValue! == y);
+                    if (member is null)
+                    {
+                        // TODO: Issue warning
+                        continue;
+                    }
+
+                    acceptedTagValues.Add(member.Name);
+                }
+            }
+
+            good.Add(new()
+            {
+                PayloadType = x.PayloadType is null ? null : TypeSyntaxReference.From(x.PayloadType),
+                TagType = x.TagType is null ? null : TypeSyntaxReference.From(x.TagType),
+                AcceptedTagValues = acceptedTagValues.ToImmutable(),
+            });
+        }
+
         return new()
         {
-            Hierarchy = HierarchyInfo.From(context.TargetSymbol.ContainingType),
+            Hierarchy = HierarchyInfo.From(containingOrNamespaceType),
             Ok = [],
         };
     }

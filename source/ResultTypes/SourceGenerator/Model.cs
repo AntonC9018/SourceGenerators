@@ -13,21 +13,9 @@ internal sealed record Model
 
     public readonly record struct MethodModel
     {
-        public required ResultSet ResultSet { get; init; }
-        public required TypeSyntaxReference? ParamsModelType { get; init; }
-        public required ImmutableArray<Property> Properties { get; init; }
-    }
-
-    public readonly record struct Property
-    {
-        public required TypeSyntaxReference Type { get; init; }
-        public required string Name { get; init; }
-    }
-
-    public readonly record struct ResultSet
-    {
-        public required TypeSyntaxReference Type { get; init; }
-        public required ImmutableArray<string> ProvidedConcreteValues { get; init; }
+        public required TypeSyntaxReference? PayloadType { get; init; }
+        public required TypeSyntaxReference? TagType { get; init; }
+        public required ImmutableArray<string> AcceptedTagValues { get; init; }
     }
 }
 

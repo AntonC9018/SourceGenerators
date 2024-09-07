@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using SourceGeneration.Helpers;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace SourceGeneration.Models;
@@ -38,5 +39,22 @@ internal sealed record TypeInfo(string QualifiedName, TypeKind Kind, bool IsReco
                 .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken)),
             _ => ClassDeclaration(QualifiedName),
         };
+    }
+
+    public void WriteAsTypeDeclaration(ref IndentedTextWriter writer)
+    {
+        if (IsRecord)
+        {
+            writer.Write("record ");
+        }
+
+        writer.Write(Kind switch
+        {
+            TypeKind.Struct => "struct ",
+            TypeKind.Interface => "interface ",
+            _ => "class ",
+        });
+
+        writer.Write(QualifiedName);
     }
 }

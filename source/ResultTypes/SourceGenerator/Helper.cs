@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -56,7 +57,6 @@ internal static class GetErrorValueHelper
         {
             if (constant.Value is not int i)
             {
-                // TODO: Warning.
                 return Result.Failure(ResultKind.ConstantNotInt);
             }
             constValue = i;
@@ -65,7 +65,6 @@ internal static class GetErrorValueHelper
         var paramType = p.SemanticModel.GetTypeInfo(p.Argument.Expression, p.CancellationToken).Type;
         if (paramType is null)
         {
-            // TODO: Warning.
             return Result.Failure(ResultKind.NoArgumentType);
         }
 
@@ -79,15 +78,13 @@ internal static class GetErrorValueHelper
 
 internal struct OverloadBuilder() : IDisposable
 {
-    public required ITypeSymbol? Type { get; init; }
-    public bool IsWithoutExplicitResult => true;
+    public ITypeSymbol? TagType { get; set; }
+    public ITypeSymbol? PayloadType { get; set; }
     public ImmutableArrayBuilder<int> Constants { get; init; } = ImmutableArrayBuilder<int>.Rent();
-    public ImmutableArrayBuilder<IncompleteProperty> Properties = ImmutableArrayBuilder<IncompleteProperty>.Rent();
 
     public void Dispose()
     {
         Constants.Dispose();
-        Properties.Dispose();
     }
 }
 
@@ -101,127 +98,12 @@ internal struct ResultSetsBuilder() : IDisposable
     }
 }
 
-internal readonly record struct IncompleteProperty
-{
-    public required ITypeSymbol Type { get; init; }
-    public required string Name { get; init; }
-}
-
 
 internal readonly record struct ResultSetUsage(ITypeSymbol Type, int? ConstValue);
 
-internal static class AddPropertyHelper
-{
-    private static int FindPropertyIndex(
-        ReadOnlySpan<IncompleteProperty> properties,
-        string name)
-    {
-        for (int index = 0; index < properties.Length; index++)
-        {
-            var property = properties[index];
-            if (property.Name == name)
-            {
-                return index;
-            }
-        }
-        return -1;
-    }
-
-    public enum ResultKind
-    {
-        Ok,
-        TypeConflict,
-    }
-
-    public readonly record struct Result
-    {
-        public ResultKind ResultKind { get; init; }
-        public ITypeSymbol? ExistingType { get; init; }
-
-        public static Result Ok() => new()
-        {
-            ResultKind = ResultKind.Ok,
-        };
-
-        public static Result TypeConflict(ITypeSymbol existingType) => new()
-        {
-            ResultKind = ResultKind.TypeConflict,
-            ExistingType = existingType,
-        };
-    }
-
-    public static Result Add(
-        ref ImmutableArrayBuilder<IncompleteProperty> builder,
-        IncompleteProperty p)
-    {
-        var index = FindPropertyIndex(builder.WrittenSpan, p.Name);
-        if (index == -1)
-        {
-            builder.Add(p);
-            return Result.Ok();
-        }
-
-        var existing = builder.WrittenSpan[index];
-        if (existing.Type.Equals(p.Type, SymbolEqualityComparer.Default))
-        {
-            return Result.TypeConflict(existing.Type);
-        }
-
-        return Result.Ok();
-    }
-}
-
 internal static class Helper
 {
-
-    public readonly record struct HandleNewParams
-    {
-        public required ObjectCreationExpressionSyntax NewTypeSyntax { get; init; }
-        public required SemanticModel SemanticModel { get; init; }
-        public required CancellationToken CancellationToken { get; init; }
-    }
-
-    public static bool HandleNew(
-        HandleNewParams p,
-        ref ImmutableArrayBuilder<IncompleteProperty> builder)
-    {
-        if (p.NewTypeSyntax.Initializer is not { } initializer)
-        {
-            return false;
-        }
-
-        foreach (var prop in initializer.Expressions)
-        {
-            if (prop is not AssignmentExpressionSyntax assignment)
-            {
-                // TODO: warning.
-                return false;
-            }
-
-            // Try to find the property
-            var name = assignment.Left.ToString();
-            var type = p.SemanticModel.GetTypeInfo(assignment.Left, p.CancellationToken).Type;
-            if (type is null)
-            {
-                // TODO: warning.
-                return false;
-            }
-
-            var result = AddPropertyHelper.Add(ref builder, new()
-            {
-                Name = name,
-                Type = type,
-            });
-
-            if (result.ResultKind != AddPropertyHelper.ResultKind.Ok)
-            {
-                break;
-            }
-        }
-        return true;
-    }
-
-    public static ref OverloadBuilder HandleConstant(
+    public static int? HandleConstant(
         GetErrorValueHelper.Params p,
         ref ResultSetsBuilder builder)
     {
@@ -233,27 +115,31 @@ internal static class Helper
         });
         if (result.ResultKind != GetErrorValueHelper.ResultKind.Ok)
         {
-            return ref Unsafe.NullRef<OverloadBuilder>();
+            return null;
         }
-        ref var overloadBuilder = ref AddForType(ref builder, result.Usage);
-        return ref overloadBuilder;
+        var overloadBuilder = AddForType(ref builder, result.Usage);
+        return overloadBuilder;
     }
 
 
-    public static ref OverloadBuilder AddForType(
+    public static int AddForType(
         ref ResultSetsBuilder builder,
         ResultSetUsage p)
     {
-        foreach (ref var r in builder.Values.WrittenSpan)
+        var builders = builder.Values.WrittenSpan;
+        for (int index = 0; index < builders.Length; index++)
         {
-            if (r.Type is null)
+            var r = builders[index];
+            if (r.TagType is null)
             {
                 continue;
             }
-            if (!r.Type.Equals(p.Type, SymbolEqualityComparer.Default))
+
+            if (!r.TagType.Equals(p.Type, SymbolEqualityComparer.Default))
             {
                 continue;
             }
+
             if (r.Constants.Count == 0)
             {
                 continue;
@@ -267,12 +153,13 @@ internal static class Helper
             {
                 r.Constants.Clear();
             }
-            return ref r;
+
+            return index;
         }
 
         var b = new OverloadBuilder
         {
-            Type = p.Type,
+            TagType = p.Type,
         };
         {
             if (p.ConstValue is { } i)
@@ -281,6 +168,51 @@ internal static class Helper
             }
         }
         builder.Values.Add(b);
-        return ref builder.Values.WrittenSpan[^1];
+        return builders.Length - 1;
+    }
+
+    public readonly record struct HandleArgumentTypeParams
+    {
+        public required ExpressionSyntax NewTypeSyntax { get; init; }
+        public required SemanticModel SemanticModel { get; init; }
+        public required CancellationToken CancellationToken { get; init; }
+    }
+    public static void HandleArgumentType(
+        HandleArgumentTypeParams p,
+        ref ResultSetsBuilder builder)
+    {
+        var type = p.SemanticModel.GetTypeInfo(p.NewTypeSyntax).Type;
+        bool HasCorrespondingOverload(ref ResultSetsBuilder b)
+        {
+            var builders = b.Values.WrittenSpan;
+            for (int i = 0; i < builders.Length; i++)
+            {
+                if (builders[i].PayloadType is not { } payloadType)
+                {
+                    continue;
+                }
+                if (builders[i].TagType is not null)
+                {
+                    continue;
+                }
+                if (!payloadType.Equals(type, SymbolEqualityComparer.Default))
+                {
+                    continue;
+                }
+                if (builders[i].Constants.Count == 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (!HasCorrespondingOverload(ref builder))
+        {
+            builder.Values.Add(new()
+            {
+                PayloadType = type,
+            });
+        }
     }
 }

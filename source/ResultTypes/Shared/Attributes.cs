@@ -28,3 +28,14 @@ public sealed class ResultBaseAttribute(Type t) : Attribute
 {
     public Type Type { get; set; } = t;
 }
+
+/// <summary>
+/// Must have an Ok and a GenericFailure members.
+/// These will be used when Ok and Failure is called without arguments.
+/// </summary>
+[AttributeUsage(AttributeTargets.Assembly, Inherited = false)]
+[Conditional(Constants.ConditionString)]
+public sealed class WellKnownResultType(Type t) : Attribute
+{
+    public Type Type { get; set; } = t;
+}

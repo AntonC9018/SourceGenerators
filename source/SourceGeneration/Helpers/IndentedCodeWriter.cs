@@ -5,6 +5,7 @@
 
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -109,6 +110,13 @@ internal sealed class IndentedTextWriter : IDisposable
     public void DecreaseIndent()
     {
         this.currentIndentationLevel--;
+        this.currentIndentation = this.availableIndentations[this.currentIndentationLevel];
+    }
+
+    public void DecreaseIndentBy(int n)
+    {
+        Debug.Assert(currentIndentationLevel >= n);
+        this.currentIndentationLevel -= n;
         this.currentIndentation = this.availableIndentations[this.currentIndentationLevel];
     }
 

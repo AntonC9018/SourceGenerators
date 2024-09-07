@@ -1,3 +1,4 @@
+using System;
 using SourceGeneration.Extensions;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
@@ -9,35 +10,40 @@ using static Microsoft.CodeAnalysis.SymbolDisplayTypeQualificationStyle;
 namespace SourceGeneration.Models;
 
 /// <summary>
-/// A model describing the hierarchy info for a specific type.
+/// A model describing the hierarchy info for a specific type or namespace.
 /// </summary>
 /// <param name="FullyQualifiedMetadataName">The fully qualified metadata name for the current type.</param>
 /// <param name="Namespace">Gets the namespace for the current type.</param>
 /// <param name="Hierarchy">Gets the sequence of type definitions containing the current type.</param>
-internal sealed partial record HierarchyInfo(string FullyQualifiedMetadataName, string Namespace, EquatableArray<TypeInfo> Hierarchy)
+internal sealed partial record HierarchyInfo(
+    string FullyQualifiedMetadataName,
+    string Namespace,
+    EquatableArray<TypeInfo> Hierarchy)
 {
-    /// <summary>
-    /// Creates a new <see cref="HierarchyInfo"/> instance from a given <see cref="INamedTypeSymbol"/>.
-    /// </summary>
-    /// <param name="typeSymbol">The input <see cref="INamedTypeSymbol"/> instance to gather info for.</param>
-    /// <returns>A <see cref="HierarchyInfo"/> instance describing <paramref name="typeSymbol"/>.</returns>
-    public static HierarchyInfo From(INamedTypeSymbol typeSymbol)
+    public bool IsNamespace => Hierarchy.IsEmpty;
+
+    public static HierarchyInfo From(INamespaceOrTypeSymbol symbol)
     {
         using var hierarchy = ImmutableArrayBuilder<TypeInfo>.Rent();
 
-        for (INamedTypeSymbol? parent = typeSymbol;
-             parent is not null;
-             parent = parent.ContainingType)
+        if (symbol.IsType)
         {
-            hierarchy.Add(new TypeInfo(
-                parent.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                parent.TypeKind,
-                parent.IsRecord));
+            for (INamedTypeSymbol? parent = (INamedTypeSymbol) symbol;
+                 parent is not null;
+                 parent = parent.ContainingType)
+            {
+                hierarchy.Add(new TypeInfo(
+                    parent.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    parent.TypeKind,
+                    parent.IsRecord));
+            }
         }
 
+        var ns = symbol.IsType ? symbol.ContainingNamespace : symbol;
+
         return new(
-            typeSymbol.GetFullyQualifiedMetadataName(),
-            typeSymbol.ContainingNamespace.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
+            symbol.GetFullyQualifiedMetadataName(),
+            ns.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
             hierarchy.ToImmutable());
     }
 
@@ -51,6 +57,11 @@ internal sealed partial record HierarchyInfo(string FullyQualifiedMetadataName, 
         MemberDeclarationSyntax[] memberDeclarations,
         bool nullableEnable = true)
     {
+        if (IsNamespace)
+        {
+            throw new NotSupportedException("HierarchyInfo GetSyntax can only be done on types");
+        }
+
         // Create the partial type declaration with for the current hierarchy.
         // This code produces a type declaration as follows:
         //
@@ -133,4 +144,26 @@ internal static class GeneratedFileHelper
         w.WriteLine("#pragma warning disable");
         w.WriteLine("#nullable enable");
     }
+
+    public static HierarchyCleanup StartHierarchy(this IndentedTextWriter w, HierarchyInfo hierarchy)
+    {
+        w.WriteLine($"namespace {hierarchy.Namespace};\n");
+
+        foreach (var type in hierarchy.Hierarchy)
+        {
+            w.Write("partial ");
+            type.WriteAsTypeDeclaration(ref w);
+            w.WriteLine();
+            w.WriteBlock();
+        }
+
+        return new(w, hierarchy.Hierarchy.Length);
+    }
+}
+
+internal readonly struct HierarchyCleanup(
+    IndentedTextWriter writer,
+    int blockCount)
+{
+    public void Dispose() => writer.DecreaseIndentBy(blockCount);
 }
