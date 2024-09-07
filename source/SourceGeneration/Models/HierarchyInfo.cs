@@ -20,15 +20,34 @@ internal sealed partial record HierarchyInfo(
     string Namespace,
     EquatableArray<TypeInfo> Hierarchy)
 {
-    public bool IsNamespace => Hierarchy.IsEmpty;
-
-    public static HierarchyInfo From(INamespaceOrTypeSymbol symbol)
+    public static HierarchyInfo From(INamedTypeSymbol typeSymbol)
     {
         using var hierarchy = ImmutableArrayBuilder<TypeInfo>.Rent();
 
-        if (symbol.IsType)
+        for (INamedTypeSymbol? parent = typeSymbol;
+             parent is not null;
+             parent = parent.ContainingType)
         {
-            for (INamedTypeSymbol? parent = (INamedTypeSymbol) symbol;
+            hierarchy.Add(new TypeInfo(
+                parent.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                parent.TypeKind,
+                parent.IsRecord));
+        }
+
+        return new(
+            typeSymbol.GetFullyQualifiedMetadataName(),
+            typeSymbol.ContainingNamespace.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
+            hierarchy.ToImmutable());
+    }
+
+
+    public static HierarchyInfo FromContainer(INamespaceOrTypeSymbol containerSymbol, TypeInfo self)
+    {
+        using var hierarchy = ImmutableArrayBuilder<TypeInfo>.Rent();
+
+        if (containerSymbol is INamedTypeSymbol typeSymbol)
+        {
+            for (INamedTypeSymbol? parent = typeSymbol;
                  parent is not null;
                  parent = parent.ContainingType)
             {
@@ -39,11 +58,11 @@ internal sealed partial record HierarchyInfo(
             }
         }
 
-        var ns = symbol.IsType ? symbol.ContainingNamespace : symbol;
+        hierarchy.Add(self);
 
         return new(
-            symbol.GetFullyQualifiedMetadataName(),
-            ns.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
+            containerSymbol.GetFullyQualifiedMetadataName() + "." + self.Name,
+            containerSymbol.ContainingNamespace.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
             hierarchy.ToImmutable());
     }
 
@@ -57,11 +76,6 @@ internal sealed partial record HierarchyInfo(
         MemberDeclarationSyntax[] memberDeclarations,
         bool nullableEnable = true)
     {
-        if (IsNamespace)
-        {
-            throw new NotSupportedException("HierarchyInfo GetSyntax can only be done on types");
-        }
-
         // Create the partial type declaration with for the current hierarchy.
         // This code produces a type declaration as follows:
         //
@@ -152,7 +166,7 @@ internal static class GeneratedFileHelper
         foreach (var type in hierarchy.Hierarchy)
         {
             w.Write("partial ");
-            type.WriteAsTypeDeclaration(ref w);
+            type.WriteAsTypeDeclaration(w);
             w.WriteLine();
             w.WriteBlock();
         }
@@ -163,7 +177,16 @@ internal static class GeneratedFileHelper
 
 internal readonly struct HierarchyCleanup(
     IndentedTextWriter writer,
-    int blockCount)
+    int blockCount) : IDisposable
 {
-    public void Dispose() => writer.DecreaseIndentBy(blockCount);
+    public void Dispose()
+    {
+        int i = blockCount;
+        while (i != 0)
+        {
+            var block = new IndentedTextWriter.Block(writer);
+            block.Dispose();
+            i--;
+        }
+    }
 }

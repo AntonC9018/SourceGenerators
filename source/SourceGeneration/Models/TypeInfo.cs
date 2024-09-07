@@ -9,10 +9,7 @@ namespace SourceGeneration.Models;
 /// <summary>
 /// A model describing a type info in a type hierarchy.
 /// </summary>
-/// <param name="QualifiedName">The qualified name for the type.</param>
-/// <param name="Kind">The type of the type in the hierarchy.</param>
-/// <param name="IsRecord">Whether the type is a record type.</param>
-internal sealed record TypeInfo(string QualifiedName, TypeKind Kind, bool IsRecord)
+internal readonly record struct TypeInfo(string Name, TypeKind Kind, bool IsRecord)
 {
     /// <summary>
     /// Creates a <see cref="TypeDeclarationSyntax"/> instance for the current info.
@@ -31,17 +28,17 @@ internal sealed record TypeInfo(string QualifiedName, TypeKind Kind, bool IsReco
         // and close brace tokens, otherwise member declarations will not be formatted correctly.
         return Kind switch
         {
-            TypeKind.Struct => StructDeclaration(QualifiedName),
-            TypeKind.Interface => InterfaceDeclaration(QualifiedName),
+            TypeKind.Struct => StructDeclaration(Name),
+            TypeKind.Interface => InterfaceDeclaration(Name),
             TypeKind.Class when IsRecord =>
-                RecordDeclaration(Token(SyntaxKind.RecordKeyword), QualifiedName)
+                RecordDeclaration(Token(SyntaxKind.RecordKeyword), Name)
                 .WithOpenBraceToken(Token(SyntaxKind.OpenBraceToken))
                 .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken)),
-            _ => ClassDeclaration(QualifiedName),
+            _ => ClassDeclaration(Name),
         };
     }
 
-    public void WriteAsTypeDeclaration(ref IndentedTextWriter writer)
+    public void WriteAsTypeDeclaration(IndentedTextWriter writer)
     {
         if (IsRecord)
         {
@@ -55,6 +52,6 @@ internal sealed record TypeInfo(string QualifiedName, TypeKind Kind, bool IsReco
             _ => "class ",
         });
 
-        writer.Write(QualifiedName);
+        writer.Write(Name);
     }
 }

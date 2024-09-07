@@ -3,10 +3,12 @@ using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ResultTypes.Shared;
+using SourceGeneration.Helpers;
 
 namespace ResultTypes.SourceGenerator;
 
-public static class ShouldBeAutogened
+internal static class ShouldBeAutogened
 {
     public readonly struct TypedGeneratorContext
     {
@@ -50,15 +52,31 @@ public static class ShouldBeAutogened
         }
     }
 
-    public static IncrementalValueProvider<string> ForTypeParamOfAttributeWithName<T>(
-        this SyntaxValueProvider syntaxProvider)
+    public static IncrementalValueProvider<T> First<T>(this IncrementalValuesProvider<T> provider)
+    {
+        return provider
+            .Collect()
+            .Select((x, _) => x[0]);
+    }
+
+    public readonly record struct ConstructorArgContext
+    {
+        public required SemanticModel SemanticModel { get; init; }
+        public required CompilationUnitSyntax CompilationUnitSyntax { get; init; }
+        public required INamedTypeSymbol ConstructorArgument { get; init; }
+        public required CancellationToken CancellationToken { get; init; }
+    }
+
+    public static IncrementalValuesProvider<U> ForTypeConstructorArgOfAttributeOnAssembly<T, U>(
+        this SyntaxValueProvider syntaxProvider,
+        Func<ConstructorArgContext, U> transform)
     {
         var fullName = typeof(T).FullName!;
         return syntaxProvider
             .ForAttributeWithMetadataName(
                 fullName,
                 predicate: (node, _) => node is CompilationUnitSyntax,
-                (context, _) =>
+                (context, ct) =>
                 {
                     var type = context.SemanticModel.Compilation.GetTypeByMetadataName(fullName);
                     var attribute = context.Attributes.First(x =>
@@ -71,52 +89,37 @@ public static class ShouldBeAutogened
                     });
                     if (attribute.ConstructorArguments.Length == 0)
                     {
-                        return null;
+                        return default;
                     }
                     var p = attribute.ConstructorArguments[0];
                     if (p.Value is not { } val)
                     {
-                        return null;
+                        return default;
                     }
                     if (val is not INamedTypeSymbol symbol)
                     {
-                        return null;
+                        return default;
                     }
-                    return symbol.ToDisplayString();
+
+                    return transform(new()
+                    {
+                        CancellationToken = ct,
+                        ConstructorArgument = symbol,
+                        SemanticModel = context.SemanticModel,
+                        CompilationUnitSyntax = (CompilationUnitSyntax) context.TargetNode,
+                    });
                 })
-            .Where(x => x is not null)
-            // Is this really the right way to do this?
-            .Collect()
-            .Select((x, _) => x.FirstOrDefault())!;
+            .Where(x => x is not null)!;
     }
 
-    public static IncrementalValueProvider<string> ForResultBaseAttribute(
+    public static IncrementalValueProvider<TypeSyntaxReference> ForTypeParamOfAttributeWithName<T>(
         this SyntaxValueProvider syntaxProvider)
     {
-        return syntaxProvider.ForAttributeWithMetadataName(
-            typeof(ResultBaseAttribute).FullName!,
-            predicate: (node, _) => node is CompilationUnitSyntax,
-            (context, _) =>
+        return syntaxProvider
+            .ForTypeConstructorArgOfAttributeOnAssembly<T, TypeSyntaxReference>(x =>
             {
-                var attribute = context.Attributes.First(typeof(ResultBaseAttribute).FullName!);
-                return attribute.ConstructorArguments.FirstOrDefault().Value as string;
-            }).Where(x => x is not null);
-    }
-
-    public static IncrementalValuesProvider<T> ForWellKnownResultAttribute<T>(
-        this SyntaxValueProvider syntaxProvider,
-        Func<TypedGeneratorContextGlobal, CancellationToken, T> valueFactory)
-    {
-        return syntaxProvider.ForAttributeWithMetadataName(
-            typeof(WellKnownResultAttribute).FullName!,
-            predicate: (node, _) => node is CompilationUnitSyntax,
-            (context, cancellationToken) =>
-            {
-                var attribute = context.Attributes.First(typeof(WellKnownResultAttribute).FullName!);
-                var typedContext = new TypedGeneratorContextGlobal(
-                    attribute,
-                    context.SemanticModel);
-                return valueFactory(typedContext, cancellationToken);
-            });
+                return TypeSyntaxReference.From(x.ConstructorArgument);
+            })
+            .First();
     }
 }

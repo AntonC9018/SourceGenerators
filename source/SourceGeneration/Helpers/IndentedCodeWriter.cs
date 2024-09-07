@@ -357,6 +357,11 @@ internal sealed class IndentedTextWriter : IDisposable
         this.builder.AddRange(content);
     }
 
+    public ListWriter List(string separator = ", ")
+    {
+        return new(this, separator);
+    }
+
     /// <summary>
     /// A delegate representing a callback to write data into an <see cref="IndentedTextWriter"/> instance.
     /// </summary>
@@ -369,25 +374,86 @@ internal sealed class IndentedTextWriter : IDisposable
     /// Represents an indented block that needs to be closed.
     /// </summary>
     /// <param name="writer">The input <see cref="IndentedTextWriter"/> instance to wrap.</param>
-    public struct Block(IndentedTextWriter writer) : IDisposable
+    public readonly struct Block(IndentedTextWriter writer) : IDisposable
     {
-        /// <summary>
-        /// The <see cref="IndentedTextWriter"/> instance to write to.
-        /// </summary>
-        private IndentedTextWriter? writer = writer;
-
         /// <inheritdoc/>
         public void Dispose()
         {
-            IndentedTextWriter? writer = this.writer;
+            writer.DecreaseIndent();
+            writer.WriteLine("}");
+        }
+    }
 
-            this.writer = null;
+    public struct ListWriter(IndentedTextWriter writer, string separator)
+    {
+        internal IndentedTextWriter _writer = writer;
+        private bool _isFirst = true;
 
-            if (writer is not null)
+        public void MaybeWriteSeparator()
+        {
+            if (!_isFirst)
             {
-                writer.DecreaseIndent();
-                writer.WriteLine("}");
+                _writer.Write(separator);
             }
+            else
+            {
+                _isFirst = false;
+            }
+        }
+
+        public void Write(string content)
+        {
+            MaybeWriteSeparator();
+            _writer.Write(content);
+        }
+
+        public void Write(ReadOnlySpan<char> content)
+        {
+            MaybeWriteSeparator();
+            _writer.Write(content);
+        }
+
+        public void Write([InterpolatedStringHandlerArgument("")] ref ListWriteInterpolatedStringHandler handler)
+        {
+            MaybeWriteSeparator();
+            _writer.Write(ref handler);
+        }
+    }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [InterpolatedStringHandler]
+    public readonly ref struct ListWriteInterpolatedStringHandler
+    {
+        private readonly WriteInterpolatedStringHandler writer;
+
+        public ListWriteInterpolatedStringHandler(int literalLength, int formattedCount, ListWriter writer)
+        {
+            this.writer = new WriteInterpolatedStringHandler(literalLength, formattedCount, writer._writer);
+        }
+
+        public void AppendLiteral(string value)
+        {
+            writer.AppendLiteral(value);
+        }
+
+        public void AppendFormatted(string? value)
+        {
+            writer.AppendFormatted(value);
+        }
+
+        public void AppendFormatted(ReadOnlySpan<char> value)
+        {
+            writer.AppendFormatted(value);
+        }
+
+        public void AppendFormatted<T>(T value)
+        {
+            writer.AppendFormatted(value);
+        }
+
+        public void AppendFormatted<T>(T value, string? format)
+        {
+            writer.AppendFormatted(value, format);
         }
     }
 

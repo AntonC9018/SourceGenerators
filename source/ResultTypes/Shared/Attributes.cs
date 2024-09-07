@@ -22,7 +22,7 @@ public sealed class TagAttribute : Attribute
 /// Must have a <c>Create(value)</c> static method that creates a value,
 /// adjusted to the global error set.
 /// </summary>
-[AttributeUsage(AttributeTargets.Assembly, Inherited = false)]
+[AttributeUsage(AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
 [Conditional(Constants.ConditionString)]
 public sealed class ResultBaseAttribute(Type t) : Attribute
 {
@@ -33,7 +33,7 @@ public sealed class ResultBaseAttribute(Type t) : Attribute
 /// Must have an Ok and a GenericFailure members.
 /// These will be used when Ok and Failure is called without arguments.
 /// </summary>
-[AttributeUsage(AttributeTargets.Assembly, Inherited = false)]
+[AttributeUsage(AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
 [Conditional(Constants.ConditionString)]
 public sealed class WellKnownResultType(Type t) : Attribute
 {

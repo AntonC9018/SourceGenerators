@@ -177,6 +177,7 @@ internal static class Helper
         public required SemanticModel SemanticModel { get; init; }
         public required CancellationToken CancellationToken { get; init; }
     }
+
     public static void HandleArgumentType(
         HandleArgumentTypeParams p,
         ref ResultSetsBuilder builder)
