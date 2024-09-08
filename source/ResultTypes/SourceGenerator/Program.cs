@@ -1,12 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ResultTypes.Shared;
 using SourceGeneration.Models;
@@ -85,7 +84,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             var textWriter = new IndentedTextWriter();
             GenerateCachedPropertyInfos(item, textWriter);
             context.AddSource(
-                item.ParentTypeName + ".CachedPropertyInfo.g.cs",
+                item.Model.ResultHierarchy.FullyQualifiedMetadataName + ".g.cs",
                 textWriter.ToString());
         });
     }
@@ -244,6 +243,36 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 defaultTypeInfo);
         }
 
+        var subsetAttribute = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(SubsetAttribute).FullName!)!;
+        var genericSubsetAttribute = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(SubsetAttribute<>).FullName!)!;
+
+        INamedTypeSymbol? GetSubsetType(ITypeSymbol tag)
+        {
+            var attributes = tag.GetAttributes();
+            foreach (var attribute in attributes)
+            {
+                var c = attribute.AttributeClass;
+                if (c is null)
+                {
+                    continue;
+                }
+
+                if (c.Equals(subsetAttribute, SymbolEqualityComparer.Default))
+                {
+                    return (INamedTypeSymbol) attribute.ConstructorArguments[0].Value!;
+                }
+
+                if (c.IsGenericType && c.OriginalDefinition.Equals(genericSubsetAttribute, SymbolEqualityComparer.Default))
+                {
+                    // get generic param
+                    return (INamedTypeSymbol) c.TypeArguments[0];
+                }
+            }
+            return null;
+        }
+
         Model.Overloads ConvertToModel(State state)
         {
             using var builder = ImmutableArrayBuilder<Model.MethodModel>.Rent();
@@ -269,11 +298,36 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     }
                 }
 
+                Model.TagType? GetTag()
+                {
+                    if (x.TagType is not { } tag)
+                    {
+                        return null;
+                    }
+
+                    TypeSyntaxReference? subsetTypeRef = null;
+                    if (tag.TypeKind == TypeKind.Enum)
+                    {
+                        var subsetType = GetSubsetType(tag);
+                        if (subsetType != null)
+                        {
+                            subsetTypeRef = TypeSyntaxReference.From(subsetType);
+                        }
+                    }
+
+                    return new()
+                    {
+                        Type = TypeSyntaxReference.From(tag),
+                        ShortName = tag.Name,
+                        SupersetReference = subsetTypeRef,
+                        IsEnum = tag.TypeKind == TypeKind.Enum,
+                    };
+                }
+
                 builder.Add(new()
                 {
-                    TagTypeShortName = x.TagType?.Name,
+                    Tag = GetTag(),
                     PayloadType = x.PayloadType is null ? null : TypeSyntaxReference.From(x.PayloadType),
-                    TagType = x.TagType is null ? null : TypeSyntaxReference.From(x.TagType),
                     AcceptedTagValues = acceptedTagValues.ToImmutable(),
                 });
             }
@@ -292,13 +346,22 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         };
     }
 
+    private readonly record struct TagInfo(
+        HashSet<string> Values,
+        bool IsEnum,
+        string? BaseSet);
+
     private static void GenerateCachedPropertyInfos(ConfigAndModel p, IndentedTextWriter w)
     {
         w.WriteFileStart(nullableEnable: true);
         using var s1 = w.StartHierarchy(p.Model.ResultHierarchy);
 
-        var ownShortName = p.Model.ResultHierarchy.Hierarchy[^1].Name;
-        w.WriteLine($"public required {ownShortName}Tag Tag {{ get; init; }}");
+        var resultTypeInfo = p.Model.ResultHierarchy.Hierarchy[^1];
+        var tagTypeInfo = resultTypeInfo with
+        {
+            Name = resultTypeInfo.Name + "Tag",
+        };
+        w.WriteLine($"public required {resultTypeInfo.Name}Tag Tag {{ get; init; }}");
         w.WriteLine($"public Exception? Exception {{ get; init; }}");
 
         void WritePayloadFieldName(string defaultPrefix, Model.MethodModel m)
@@ -309,7 +372,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 return;
             }
 
-            if (m.TagType is not { })
+            if (m.Tag is not { })
             {
                 w.Write($"{defaultPrefix}Payload");
                 return;
@@ -318,7 +381,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             // Allows all values
             if (m.AcceptedTagValues.IsEmpty)
             {
-                w.Write($"{m.TagTypeShortName!}Payload");
+                w.Write($"{m.Tag.ShortName}Payload");
                 return;
             }
 
@@ -390,7 +453,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         {
             if (overloads.HasMethodWithNoArgs)
             {
-                w.WriteLine($"public static {ownShortName} {defaultPrefix}()");
+                w.WriteLine($"public static {resultTypeInfo.Name} {defaultPrefix}()");
                 using var b = w.WriteBlock();
                 w.WriteLine($"return new()");
                 using var b1 = w.WriteBlock();
@@ -400,17 +463,17 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
             foreach (var m in overloads.Methods)
             {
-                w.Write($"public static {ownShortName} {defaultPrefix}(");
+                w.Write($"public static {resultTypeInfo.Name} {defaultPrefix}(");
                 var list = w.List();
 
-                if (m.TagType is { } tag)
+                if (m.Tag is { } tag)
                 {
-                    w.Write($"{tag.FullyQualifiedName} tag");
+                    w.Write($"{tag.Type} tag");
                 }
 
                 if (m.PayloadType is { } payloadType)
                 {
-                    w.Write($"{payloadType.FullyQualifiedName} payload");
+                    w.Write($"{payloadType} payload");
                 }
 
                 if (!includeExceptionParam)
@@ -427,7 +490,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     {
                         if (m.AcceptedTagValues.Length > 1)
                         {
-                            var tagType = m.TagType!.Value.FullyQualifiedName;
+                            var tagType = m.Tag!.Type.FullyQualifiedName;
                             w.Write("Debug.Assert(tag is ");
                             var list = w.List(separator: " or ");
                             foreach (var tagName in m.AcceptedTagValues)
@@ -468,28 +531,219 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             var block = new IndentedTextWriter.Block(w);
             block.Dispose();
 
+            tagTypeInfo.WriteAsTypeDeclaration(w);
+
             // open a block for the tag type
             // we don't need to close it, the disposal
             // on the hierarchy will close it.
             // It is hacky, but that's what we have to do with the current abstractions.
-
-            var last = p.Model.ResultHierarchy.Hierarchy[^1];
-            last.WriteAsTypeDeclaration(w); // the same name + Tag
-            w.WriteLine("Tag");
             _ = w.WriteBlock();
-
-            // Constructor, for each of the supported types.
-            // Checks for the supported tags of those types (asserts).
-            // Using ResultBase.Create<T>(value) make try convert methods (with assertions too).
-            // ResultSetsOf() for this type
-            // Declare() that declares all the base sets this depends on
-            //    - if enum, ResultBase.Declare<T>()
-            //    - if tag, T.Declare()
-            // explicit casts that assert that the value is not 0
-            // IsOk and IsFailure ?
         }
 
+        // Constructor, for each of the supported types.
+        // Checks for the supported tags of those types (asserts).
+        // Using ResultBase.Create<T>(value) make try convert methods (with assertions too).
+        // ResultSetsOf() for this type
+        // Declare() that declares all the base sets this depends on
+        //    - if enum, ResultBase.Declare<T>()
+        //    - if tag, T.Declare()
+        // explicit casts that assert that the value is not 0 ?
+        // IsOk and IsFailure ?
+        Dictionary<string, TagInfo> tags = new();
+        AddForOverloads(p.Model.OkOverloads, "Ok");
+        AddForOverloads(p.Model.FailureMethods, "GenericFailure");
 
+        void AddForOverloads(Model.Overloads overloads, string genericTag)
+        {
+            void AddDefault()
+            {
+                var key = p.Config.WellKnownTypes.FullyQualifiedName;
+                if (!tags.TryGetValue(key, out var v))
+                {
+                    v = new(Values: new(), IsEnum: true, BaseSet: null);
+                    tags.Add(key, v);
+                }
+                v.Values.Add(genericTag);
+            }
+            if (overloads.HasMethodWithNoArgs)
+            {
+                AddDefault();
+            }
+            foreach (var m in overloads.Methods)
+            {
+                if (m.Tag is not { } tagType)
+                {
+                    AddDefault();
+                    continue;
+                }
+
+                if (!tags.TryGetValue(tagType.Type, out var list))
+                {
+                    list = new(
+                        m.AcceptedTagValues.ToHashSet(),
+                        IsEnum: tagType.IsEnum,
+                        BaseSet: tagType.SupersetReference?.FullyQualifiedName);
+                    tags.Add(tagType.Type, list);
+                    continue;
+                }
+
+                if (m.AcceptedTagValues.IsEmpty)
+                {
+                    list.Values.Clear();
+                    continue;
+                }
+
+                foreach (var x in m.AcceptedTagValues)
+                {
+                    list.Values.Add(x);
+                }
+            }
+        }
+
+        w.Write("public ResultBase Value { get; }");
+
+        WriteConstructors();
+        WriteTryCreateWithCheck();
+        WriteResultSets();
+        WriteDeclares();
+        WriteAsTags();
+
+        // Constructors
+        void WriteConstructors()
+        {
+            w.Write($"private {tagTypeInfo.Name}(ResultBase tag) => Value = tag;");
+
+            foreach (var t in tags)
+            {
+                w.Write($"public {tagTypeInfo.Name}({t.Key} tag)");
+                {
+                    using var b = w.WriteBlock();
+                    if (t.Value.Values.Count > 0)
+                    {
+                        w.Write($"Debug.Assert(tag is ");
+                        var list = w.List(separator: " or ");
+                        foreach (var tagName in t.Value.Values)
+                        {
+                            list.Write($"{t.Key}.{tagName}");
+                        }
+                        w.WriteLine(");");
+                    }
+
+                    if (t.Value.IsEnum)
+                    {
+                        w.WriteLine($"Value = ResultBase.Convert<{t.Key}>(tag);");
+                    }
+                    else
+                    {
+                        w.WriteLine($"Value = tag.Value;");
+                    }
+                }
+                w.WriteLine();
+            }
+
+        }
+
+        void WriteTryCreateWithCheck()
+        {
+            w.WriteLine($"public static {tagTypeInfo.Name}? TryCreateWithCheck(ResultBase value)");
+            {
+                using var b = w.WriteBlock();
+                {
+                    w.WriteLine("var ret = new(value);");
+                }
+                foreach (var t in tags)
+                {
+                    using var b1 = w.WriteBlock();
+                    w.WriteLine($"var r = ret.As<{t.Key}>();");
+                    w.WriteLine($"if (r is not null)");
+                    using var b2 = w.WriteBlock();
+                    w.WriteLine("return ret;");
+                }
+                w.WriteLine("return null;");
+            }
+        }
+
+        // Result sets
+        void WriteResultSets()
+        {
+            w.WriteLine($"public static readonly global::{typeof(ImmutableArray<>).Namespace!}.ImmutableArray<{p.Config.ResultSet}> ResultSets = [");
+            w.IncreaseIndent();
+            foreach (var t in tags)
+            {
+                void WriteValue()
+                {
+                    if (!t.Value.IsEnum)
+                    {
+                        Debug.Assert(t.Value.Values.Count == 0);
+                        // This could duplicate the result sets.
+                        // We can't solve this easily.
+                        // Having recursive dependencies is a nightmare in source generators.
+                        // Another option is computing this at runtime (removing duplicates).
+                        // This option is doable, the annoying thing is just that it's more work at runtime.
+                        w.WriteLine($".. {t.Value}.ResultSets");
+                        return;
+                    }
+                    w.Write($"ResultBase.ResultSetOf<t.Key>(");
+                    if (t.Value.Values.Count != 0)
+                    {
+                        w.Write("[");
+                        var list = w.List(separator: ", ");
+                        foreach (var x in t.Value.Values)
+                        {
+                            list.Write($"{t.Key}.{x}");
+                        }
+                        w.Write("]");
+                    }
+                    w.Write(")");
+                }
+                WriteValue();
+                w.WriteLine(",");
+            }
+            w.DecreaseIndent();
+            w.WriteLine("];");
+        }
+
+        // Declares
+        void WriteDeclares()
+        {
+            w.WriteLine("public static void Declare()");
+            {
+                using var b1 = w.WriteBlock();
+                foreach (var t in tags)
+                {
+                    if (!t.Value.IsEnum)
+                    {
+                        w.WriteLine($"{t.Key}.Declare();");
+                        continue;
+                    }
+                    if (t.Value.BaseSet is { } baseSet)
+                    {
+                        w.WriteLine($"ResultBase.DeclareSubset<{t.Key}, {baseSet}>();");
+                    }
+                }
+            }
+        }
+
+        // As<Tag>
+        void WriteAsTags()
+        {
+            foreach (var t in tags)
+            {
+                w.WriteLine($"public readonly {t.Key} As{t.Key}()");
+                {
+                    using var b = w.WriteBlock();
+                    if (t.Value.IsEnum)
+                    {
+                        w.WriteLine($"return ResultBase.As<{t.Key}>(Value);");
+                    }
+                    else
+                    {
+                        w.WriteLine($"return {t.Key}.TryCreateWithCheck(Value);");
+                    }
+                }
+                w.WriteLine();
+            }
+        }
     }
 }
 

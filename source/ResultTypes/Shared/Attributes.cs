@@ -39,3 +39,15 @@ public sealed class WellKnownResultType(Type t) : Attribute
 {
     public Type Type { get; set; } = t;
 }
+
+
+[AttributeUsage(AttributeTargets.Enum, Inherited = false, AllowMultiple = false)]
+[Conditional(Constants.ConditionString)]
+public class SubsetAttribute(Type t) : Attribute
+{
+    public Type Type { get; set; } = t;
+}
+
+public sealed class SubsetAttribute<T>() : SubsetAttribute(typeof(T))
+{
+}
