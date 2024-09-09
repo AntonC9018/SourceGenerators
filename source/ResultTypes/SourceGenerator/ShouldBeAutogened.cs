@@ -30,7 +30,7 @@ internal static class ShouldBeAutogened
     {
         return syntaxProvider.ForAttributeWithMetadataName(
             typeof(GenerateResultTypeAttribute).FullName!,
-            predicate: (node, _) => node is CompilationUnitSyntax,
+            predicate: (node, _) => node is MethodDeclarationSyntax,
             (context, cancellationToken) =>
             {
                 var s = (IMethodSymbol) context.TargetSymbol;
@@ -52,11 +52,12 @@ internal static class ShouldBeAutogened
         }
     }
 
-    public static IncrementalValueProvider<T> First<T>(this IncrementalValuesProvider<T> provider)
+    public static IncrementalValueProvider<T?> First<T>(this IncrementalValuesProvider<T> provider)
+        where T : struct
     {
         return provider
             .Collect()
-            .Select((x, _) => x[0]);
+            .Select((x, _) => x.Length == 0 ? (T?) null : x[0]);
     }
 
     public readonly record struct ConstructorArgContext
@@ -69,7 +70,8 @@ internal static class ShouldBeAutogened
 
     public static IncrementalValuesProvider<U> ForTypeConstructorArgOfAttributeOnAssembly<T, U>(
         this SyntaxValueProvider syntaxProvider,
-        Func<ConstructorArgContext, U> transform)
+        Func<ConstructorArgContext, U?> transform)
+        where U : struct
     {
         var fullName = typeof(T).FullName!;
         return syntaxProvider
@@ -109,10 +111,11 @@ internal static class ShouldBeAutogened
                         CompilationUnitSyntax = (CompilationUnitSyntax) context.TargetNode,
                     });
                 })
-            .Where(x => x is not null)!;
+            .Where(x => x != null)
+            .Select((x, _) => x!.Value);
     }
 
-    public static IncrementalValueProvider<TypeSyntaxReference> ForTypeParamOfAttributeWithName<T>(
+    public static IncrementalValueProvider<TypeSyntaxReference?> ForTypeParamOfAttributeWithName<T>(
         this SyntaxValueProvider syntaxProvider)
     {
         return syntaxProvider

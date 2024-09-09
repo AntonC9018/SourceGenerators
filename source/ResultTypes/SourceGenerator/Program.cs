@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ResultTypes.Shared;
 using SourceGeneration.Models;
@@ -39,7 +41,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             .ForGenerateResultTypesAttribute(static (context, ct) => CreateModel(context, ct))
             .Where(x => x != null)!;
 
-        IncrementalValueProvider<Config> config =
+        IncrementalValueProvider<Config?> config =
             context.SyntaxProvider.ForTypeConstructorArgOfAttributeOnAssembly<
                     ResultBaseAttribute,
                     (TypeSyntaxReference ResultBase, TypeSyntaxReference ResultSet)>(x =>
@@ -63,19 +65,31 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     return (TypeSyntaxReference.From(x.ConstructorArgument), ResultSet());
                 })
                 .First()
-                .Combine(context.SyntaxProvider.ForTypeParamOfAttributeWithName<WellKnownResultType>())
-                .Select((x, _) => new Config
+                .Combine(context.SyntaxProvider.ForTypeParamOfAttributeWithName<WellKnownResultAttribute>())
+                .Select((x, _) =>
                 {
-                    ResultBase = x.Left.ResultBase,
-                    ResultSet = x.Left.ResultSet,
-                    WellKnownTypes = x.Right,
+                    if (x.Left is not { } left)
+                    {
+                        return null;
+                    }
+                    if (x.Right is not { } right)
+                    {
+                        return null;
+                    }
+                    return new Config
+                    {
+                        ResultBase = left.ResultBase,
+                        ResultSet = left.ResultSet,
+                        WellKnownTypes = right,
+                    };
                 });
 
         var final = propertiesInfo
             .Combine(config)
+            .Where(x => x.Right != null)
             .Select((x, _) => new ConfigAndModel
             {
-                Config = x.Right,
+                Config = x.Right!,
                 Model = x.Left,
             });
 
@@ -99,6 +113,18 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         }
     }
 
+    private struct States() : IDisposable
+    {
+        public State Ok = new();
+        public State Failure = new();
+
+        public void Dispose()
+        {
+            Ok.Dispose();
+            Failure.Dispose();
+        }
+    }
+
     private static Model? CreateModel(
         ShouldBeAutogened.TypedGeneratorContext context,
         CancellationToken cancellationToken)
@@ -108,15 +134,54 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             return null;
         }
 
-        // Find return all syntax
-        var returnSyntaxes = context.TargetSymbol
-            .DeclaringSyntaxReferences
-            .SelectMany(r => r.GetSyntax().DescendantNodes().OfType<ReturnStatementSyntax>());
+        var subsetAttribute = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(SubsetAttribute).FullName!)!;
+        var genericSubsetAttribute = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(SubsetAttribute<>).FullName!)!;
+        var exceptionType = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(Exception).FullName!)!;
 
-        var failureState = new State();
-        var okState = new State();
-        try
         {
+            var states = new States();
+            try
+            {
+                ProcessReturnSyntaxes(ref states);
+
+                return new()
+                {
+                    ResultAccessibility = returnType.Kind == SymbolKind.ErrorType
+                        ? Accessibility.Public
+                        : returnType.DeclaredAccessibility,
+                    ResultHierarchy = GetResultHierarchy(),
+                    OkOverloads = ConvertToModel(states.Ok),
+                    FailureMethods = ConvertToModel(states.Failure),
+                };
+            }
+            finally
+            {
+                states.Dispose();
+            }
+        }
+
+        Helper.FindArgKindResult MatchArg(ArgumentSyntax argument, ArgKinds kinds)
+        {
+            return Helper.MatchArg(new()
+            {
+                Argument = argument,
+                CancellationToken = cancellationToken,
+                ExceptionSymbol = exceptionType,
+                PossibleKinds = kinds,
+                SemanticModel = context.SemanticModel,
+            });
+        }
+
+        void ProcessReturnSyntaxes(ref States states)
+        {
+            // Find return all syntax
+            var returnSyntaxes = context.TargetSymbol
+                .DeclaringSyntaxReferences
+                .SelectMany(r => r.GetSyntax().DescendantNodes().OfType<ReturnStatementSyntax>());
+
             foreach (var returnSyntax in returnSyntaxes)
             {
                 if (returnSyntax.Expression is not InvocationExpressionSyntax invocation)
@@ -127,11 +192,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 {
                     continue;
                 }
-                if (memberAccess.Expression is not MemberAccessExpressionSyntax returnTypeExpression)
-                {
-                    continue;
-                }
-                if (returnTypeExpression.Expression is not IdentifierNameSyntax returnTypeIdentifier)
+                if (memberAccess.Expression is not IdentifierNameSyntax returnTypeIdentifier)
                 {
                     continue;
                 }
@@ -144,92 +205,173 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 {
                     case "Failure":
                     {
-                        Process(ref failureState);
+                        Process(ref states.Failure, exceptionIsNotPayload: true);
                         break;
                     }
 
                     case "Ok":
                     {
-                        Process(ref okState);
+                        Process(ref states.Ok, exceptionIsNotPayload: false);
                         break;
                     }
                 }
 
-                void Process(ref State state)
+                void Process(ref State state, bool exceptionIsNotPayload)
                 {
                     var args = invocation.ArgumentList.Arguments;
-                    if (args.Count > 2)
+                    var maxCount = exceptionIsNotPayload ? 3 : 2;
+                    if (args.Count > maxCount)
                     {
                         // TODO: Issue warning in an analyzer.
                         return;
+                    }
+
+                    void AddDefault(ref State state)
+                    {
+                        state.ResultSets.Values.Add(new()
+                        {
+                            PayloadType = null,
+                            TagType = null,
+                        });
                     }
 
                     switch (args)
                     {
                         case []:
                         {
-                            state.ResultSets.Values.Add(new()
-                            {
-                                PayloadType = null,
-                                TagType = null,
-                            });
+                            AddDefault(ref state);
                             break;
                         }
                         case [{ } x]:
                         {
-                            var b = Helper.HandleConstant(new()
+                            ArgKinds kinds = ArgKinds.Const | ArgKinds.Tag;
+                            if (exceptionIsNotPayload)
                             {
-                                Argument = x,
-                                CancellationToken = cancellationToken,
-                                SemanticModel = context.SemanticModel,
-                            }, ref state.ResultSets);
+                                kinds |= ArgKinds.Exception;
+                            }
 
-                            if (b is { })
+                            var result = MatchArg(x, kinds);
+                            if (result.Failure != FindArgKindFailure.None)
                             {
                                 break;
                             }
+
+                            Helper.AddOrUpdateOverload(new()
+                            {
+                                CancellationToken = cancellationToken,
+                                ConstValue = result.ArgInfo.ConstValue,
+                                PayloadType = null,
+                                SemanticModel = context.SemanticModel,
+                                TagType = result.ArgInfo.Kind == ArgKinds.Exception
+                                    ? null
+                                    : result.ArgInfo.Type,
+                            }, ref state.ResultSets);
 
                             break;
                         }
-                        case [{ } x, { Expression: { } newTypeSyntax }]:
+                        case [{ } x, { } x1]:
                         {
-                            var b = Helper.HandleConstant(new()
-                            {
-                                Argument = x,
-                                CancellationToken = cancellationToken,
-                                SemanticModel = context.SemanticModel,
-                            }, ref state.ResultSets);
-                            if (b is not { })
+                            ArgKinds kinds = ArgKinds.Const | ArgKinds.TagOrPayload;
+
+                            var result1 = MatchArg(x, kinds);
+                            if (result1.Failure != FindArgKindFailure.None)
                             {
                                 break;
                             }
 
-                            Helper.HandleArgumentType(new()
+                            ArgKinds nextKinds = ArgKinds.Payload;
+                            if (exceptionIsNotPayload)
+                            {
+                                nextKinds |= ArgKinds.Exception;
+                            }
+
+                            var result2 = MatchArg(x1, nextKinds);
+                            if (result2.Failure != FindArgKindFailure.None)
+                            {
+                                break;
+                            }
+
+                            ITypeSymbol? tagType;
+                            ITypeSymbol? payloadType;
+
+                            bool firstMustBeTag = result1.ArgInfo.Kind is ArgKinds.Const or ArgKinds.Tag;
+                            bool isSecondException = result2.ArgInfo.Kind == ArgKinds.Exception;
+                            bool firstMustBePayload = result1.ArgInfo.Kind == ArgKinds.Payload;
+
+                            // tag, exception
+                            if (firstMustBeTag)
+                            {
+                                tagType = result1.ArgInfo.Type;
+                                payloadType = isSecondException ? null : result2.ArgInfo.Type;
+                            }
+                            // payload, exception
+                            else if (firstMustBePayload)
+                            {
+                                if (!isSecondException)
+                                {
+                                    // TODO: warning
+                                    break;
+                                }
+                                tagType = null;
+                                payloadType = result1.ArgInfo.Type;
+                            }
+                            // tag, payload
+                            else
+                            {
+                                tagType = result1.ArgInfo.Type;
+                                payloadType = result2.ArgInfo.Type;
+                            }
+
+                            Helper.AddOrUpdateOverload(new()
                             {
                                 CancellationToken = cancellationToken,
+                                ConstValue = result1.ArgInfo.ConstValue,
+                                PayloadType = payloadType,
                                 SemanticModel = context.SemanticModel,
-                                NewTypeSyntax = newTypeSyntax,
+                                TagType = tagType,
                             }, ref state.ResultSets);
 
+                            break;
+                        }
+                        // tag, payload, exception
+                        case [{ } x, { } x1, { } x2]:
+                        {
+                            if (exceptionIsNotPayload)
+                            {
+                                break;
+                            }
+
+                            var result = MatchArg(x, ArgKinds.Const | ArgKinds.Tag);
+                            if (result.Failure != FindArgKindFailure.None)
+                            {
+                                break;
+                            }
+
+                            var result1 = MatchArg(x1, ArgKinds.Payload);
+                            if (result1.Failure != FindArgKindFailure.None)
+                            {
+                                break;
+                            }
+
+                            var result2 = MatchArg(x2, ArgKinds.Exception);
+                            if (result2.Failure != FindArgKindFailure.None)
+                            {
+                                break;
+                            }
+
+                            Helper.AddOrUpdateOverload(new()
+                            {
+                                CancellationToken = cancellationToken,
+                                ConstValue = result.ArgInfo.ConstValue,
+                                PayloadType = result2.ArgInfo.Type,
+                                SemanticModel = context.SemanticModel,
+                                TagType = result.ArgInfo.Type,
+                            }, ref state.ResultSets);
                             break;
                         }
                     }
                 }
             }
-        }
-        finally
-        {
-            failureState.Dispose();
-            okState.Dispose();
-        }
-
-        // It's not clear what to do with a default failure case?
-        // Maybe it should just create like a SomeFailure member?
-        INamespaceOrTypeSymbol containerForHierarchy = context.TargetSymbol.ContainingType;
-        if (returnType.Name != "Result")
-        {
-            containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingType
-                ?? containerForHierarchy.ContainingNamespace;
         }
 
         // If a type is already defined, we must respect its positioning.
@@ -240,16 +382,20 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 return HierarchyInfo.From(returnType);
             }
 
+            // It's not clear what to do with a default failure case?
+            // Maybe it should just create like a SomeFailure member?
+            INamespaceOrTypeSymbol containerForHierarchy = context.TargetSymbol.ContainingType;
+            if (returnType.Name != "Result")
+            {
+                containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingType
+                    ?? containerForHierarchy.ContainingNamespace;
+            }
+
             var defaultTypeInfo = new TypeInfo(returnType.Name, TypeKind.Struct, IsRecord: true);
             return HierarchyInfo.FromContainer(
                 containerForHierarchy,
                 defaultTypeInfo);
         }
-
-        var subsetAttribute = context.SemanticModel.Compilation
-            .GetTypeByMetadataName(typeof(SubsetAttribute).FullName!)!;
-        var genericSubsetAttribute = context.SemanticModel.Compilation
-            .GetTypeByMetadataName(typeof(SubsetAttribute<>).FullName!)!;
 
         INamedTypeSymbol? GetSubsetType(ITypeSymbol tag)
         {
@@ -349,24 +495,18 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 Methods = builder.ToImmutable(),
             };
         }
-
-        return new()
-        {
-            ResultHierarchy = GetResultHierarchy(),
-            OkOverloads = ConvertToModel(okState),
-            FailureMethods = ConvertToModel(failureState),
-        };
     }
 
     private readonly record struct TagInfo(
         HashSet<string> Values,
         bool IsEnum,
-        string? BaseSet);
+        string? BaseSet,
+        string ShortName);
 
     private static void GenerateCachedPropertyInfos(ConfigAndModel p, IndentedTextWriter w)
     {
         w.WriteFileStart(nullableEnable: true);
-        using var s1 = w.StartHierarchy(p.Model.ResultHierarchy);
+        using var s1 = w.StartHierarchy(p.Model.ResultHierarchy, p.Model.ResultAccessibility);
 
         var resultTypeInfo = p.Model.ResultHierarchy.Hierarchy[^1];
         var tagTypeInfo = resultTypeInfo with
@@ -374,7 +514,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             Name = resultTypeInfo.Name + "Tag",
         };
         w.WriteLine($"public required {resultTypeInfo.Name}Tag Tag {{ get; init; }}");
-        w.WriteLine($"public Exception? Exception {{ get; init; }}");
+        w.WriteLine($"public global::System.Exception? Exception {{ get; init; }}");
 
         void WritePayloadFieldName(string defaultPrefix, Model.MethodModel m)
         {
@@ -459,10 +599,13 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         }
 
         void WriteConstructorFunctions(
-            string defaultPrefix,
-            bool includeExceptionParam,
+            bool isFailure,
             Model.Overloads overloads)
         {
+            string defaultPrefix = isFailure ? "Failure" : "Ok";
+            string wellKnownMember = isFailure ? "GenericFailure" : "Ok";
+            bool includeExceptionParam = isFailure;
+
             foreach (var m in overloads.Methods)
             {
                 w.Write($"public static {resultTypeInfo.Name} {defaultPrefix}(");
@@ -471,17 +614,17 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (m.Tag is { } tag)
                     {
-                        w.Write($"{tag.Type} tag");
+                        list.Write($"{tag.Type} tag");
                     }
 
                     if (m.PayloadType is { } payloadType)
                     {
-                        w.Write($"{payloadType} payload");
+                        list.Write($"{payloadType} payload");
                     }
 
-                    if (!includeExceptionParam)
+                    if (includeExceptionParam)
                     {
-                        list.Write("Exception? exception = null");
+                        list.Write("global::System.Exception? exception = null");
                     }
                 }
                 w.WriteLine(")");
@@ -494,21 +637,22 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         if (!m.AcceptedTagValues.IsEmpty)
                         {
                             var tagType = tag.Type.FullyQualifiedName;
-                            w.Write("Debug.Assert(tag is ");
+                            w.Write($"global::{typeof(Debug).FullName!}.Assert(tag is ");
                             var list = w.List(separator: " or ");
                             foreach (var tagName in m.AcceptedTagValues)
                             {
                                 list.Write($"{tagType}.{tagName}");
                             }
+                            w.WriteLine(");");
                         }
                     }
                     else
                     {
-                        w.WriteLine($"var tag = {p.Config.WellKnownTypes}.{defaultPrefix};");
+                        w.WriteLine($"var tag = {p.Config.WellKnownTypes}.{wellKnownMember};");
                     }
 
                     w.WriteLine("return new()");
-                    using var b1 = w.WriteBlock();
+                    using var b1 = w.WriteBlock(endChar: ";");
 
                     w.WriteLine($"Tag = new(tag),");
 
@@ -518,7 +662,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         w.WriteLine($" = payload,");
                     }
 
-                    if (!includeExceptionParam)
+                    if (includeExceptionParam)
                     {
                         w.WriteLine("Exception = exception,");
                     }
@@ -529,16 +673,18 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
         WriteOverloadFields("Ok", p.Model.OkOverloads);
         WriteOverloadFields("Failure", p.Model.FailureMethods);
-        WriteConstructorFunctions("Ok", includeExceptionParam: false, p.Model.OkOverloads);
-        WriteConstructorFunctions("Failure", includeExceptionParam: true, p.Model.FailureMethods);
+        WriteConstructorFunctions(isFailure: false, p.Model.OkOverloads);
+        WriteConstructorFunctions(isFailure: true, p.Model.FailureMethods);
 
         {
-
             // closes the block of the result type.
             var block = new IndentedTextWriter.Block(w);
             block.Dispose();
 
+            w.Write(SyntaxFacts.GetText(p.Model.ResultAccessibility));
+            w.Write(" ");
             tagTypeInfo.WriteAsTypeDeclaration(w);
+            w.WriteLine();
 
             // open a block for the tag type
             // we don't need to close it, the disposal
@@ -569,7 +715,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 var key = p.Config.WellKnownTypes.FullyQualifiedName;
                 if (!tags.TryGetValue(key, out var v))
                 {
-                    v = new(Values: new(), IsEnum: true, BaseSet: null);
+                    v = new(Values: new(), IsEnum: true, BaseSet: null, ShortName: "WellKnown");
                     tags.Add(key, v);
                 }
                 v.Values.Add(genericTag);
@@ -587,7 +733,8 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     list = new(
                         m.AcceptedTagValues.ToHashSet(),
                         IsEnum: tagType.IsEnum,
-                        BaseSet: tagType.SupersetReference?.FullyQualifiedName);
+                        BaseSet: tagType.SupersetReference?.FullyQualifiedName,
+                        ShortName: tagType.ShortName);
                     tags.Add(tagType.Type, list);
                     continue;
                 }
@@ -606,7 +753,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         }
 
         w.WriteLine("public ResultBase Value { get; }");
-        w.WriteLine("public bool IsNone => Value.IsNone;");
+        w.WriteLine("public readonly bool IsNone => Value.IsNone;");
 
         WriteConstructors();
         WriteTryCreateWithCheck();
@@ -618,16 +765,16 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         // Constructors
         void WriteConstructors()
         {
-            w.Write($"private {tagTypeInfo.Name}(ResultBase tag) => Value = tag;");
+            w.WriteLine($"private {tagTypeInfo.Name}(ResultBase tag) => Value = tag;");
 
             foreach (var t in tags)
             {
-                w.Write($"public {tagTypeInfo.Name}({t.Key} tag)");
+                w.WriteLine($"public {tagTypeInfo.Name}({t.Key} tag)");
                 {
                     using var b = w.WriteBlock();
                     if (t.Value.Values.Count > 0)
                     {
-                        w.Write($"Debug.Assert(tag is ");
+                        w.Write($"global::{typeof(Debug).FullName!}.Assert(tag is ");
                         var list = w.List(separator: " or ");
                         foreach (var tagName in t.Value.Values)
                         {
@@ -638,7 +785,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (t.Value.IsEnum)
                     {
-                        w.WriteLine($"Value = ResultBase.Convert<{t.Key}>(tag);");
+                        w.WriteLine($"Value = ResultBase.Create<{t.Key}>(tag);");
                     }
                     else
                     {
@@ -656,7 +803,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             {
                 using var b = w.WriteBlock();
                 {
-                    w.WriteLine("var ret = new(value);");
+                    w.WriteLine($"var ret = new {tagTypeInfo.Name}(value);");
                     w.WriteLine("if (value.IsNone)");
                     using var b1 = w.WriteBlock();
                     w.WriteLine("return ret;");
@@ -668,7 +815,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (t.Value.IsEnum)
                     {
-                        w.WriteLine($"if ((int) r != 0)");
+                        w.WriteLine($"if (r != ({t.Key}) 0)");
                     }
                     else
                     {
@@ -702,7 +849,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         w.WriteLine($".. {t.Value}.ResultSets");
                         return;
                     }
-                    w.Write($"ResultBase.ResultSetOf<t.Key>(");
+                    w.Write($"ResultBase.ResultSetOf<{t.Key}>(");
                     if (t.Value.Values.Count != 0)
                     {
                         w.Write("[");
@@ -739,6 +886,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     {
                         w.WriteLine($"ResultBase.DeclareSubset<{t.Key}, {baseSet}>();");
                     }
+                    else
+                    {
+                        w.WriteLine($"ResultBase.Declare<{t.Key}>();");
+                    }
                 }
             }
         }
@@ -748,7 +899,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         {
             foreach (var t in tags)
             {
-                w.WriteLine($"public readonly {t.Key} As{t.Key}()");
+                // TODO: This will cause conflicts.
+                var postfix = t.Value.ShortName;
+
+                w.WriteLine($"public readonly {t.Key} As{postfix}()");
                 {
                     using var b = w.WriteBlock();
                     if (t.Value.IsEnum)
@@ -759,6 +913,21 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     {
                         w.WriteLine($"return {t.Key}.TryCreateWithCheck(Value);");
                     }
+                }
+                w.WriteLine();
+            }
+
+            {
+                w.WriteLine($"public readonly T As<T>() where T : struct");
+                {
+                    using var b = w.WriteBlock();
+                    foreach (var t in tags)
+                    {
+                        w.WriteLine($"if (typeof(T) == typeof({t.Key}))");
+                        using var b1 = w.WriteBlock();
+                        w.WriteLine($"return (T) (object) As{t.Value.ShortName}();");
+                    }
+                    w.WriteLine("throw new global::System.InvalidOperationException($\"Type {typeof(T).FullName!} is not allowed here\");");
                 }
                 w.WriteLine();
             }
@@ -823,7 +992,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     isEnum: tag.IsEnum);
             }
 
-            w.WriteLine($"public bool IsOk");
+            w.WriteLine($"public readonly bool IsOk");
             using var b = w.WriteBlock();
             w.WriteLine("get");
             using var b1 = w.WriteBlock();
@@ -836,7 +1005,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (ok.IsEnum)
                     {
-                        w.WriteLine("if ((int) r != 0)");
+                        w.WriteLine($"if (r != ({ok.Tag}) 0)");
                         using var b3 = w.WriteBlock();
 
                         if (ok.Values.Count == 0)
@@ -846,7 +1015,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                         foreach (var v in ok.Values)
                         {
-                            w.WriteLine($"if (r == {ok.Tag}.{v}");
+                            w.WriteLine($"if (r == {ok.Tag}.{v})");
                             using var b4 = w.WriteBlock();
                             w.WriteLine("return true;");
                         }
@@ -860,7 +1029,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 }
             }
 
-            w.WriteLine("return false");
+            w.WriteLine("return false;");
         }
 
     }

@@ -159,17 +159,33 @@ internal static class GeneratedFileHelper
         w.WriteLine("#nullable enable");
     }
 
-    public static HierarchyCleanup StartHierarchy(this IndentedTextWriter w, HierarchyInfo hierarchy)
+    public static HierarchyCleanup StartHierarchy(
+        this IndentedTextWriter w,
+        HierarchyInfo hierarchy,
+        Accessibility lastAccessibility = Accessibility.NotApplicable)
     {
-        w.WriteLine($"namespace {hierarchy.Namespace};\n");
+        w.WriteLineIf(hierarchy.Namespace.Length > 0, $"namespace {hierarchy.Namespace};\n");
 
-        foreach (var type in hierarchy.Hierarchy)
+        void Write(in TypeInfo typeInfo)
         {
             w.Write("partial ");
-            type.WriteAsTypeDeclaration(w);
+            typeInfo.WriteAsTypeDeclaration(w);
             w.WriteLine();
             w.WriteBlock();
         }
+
+        for (int index = 0; index < hierarchy.Hierarchy.Length - 1; index++)
+        {
+            var type = hierarchy.Hierarchy[index];
+            Write(type);
+        }
+
+        if (lastAccessibility != Accessibility.NotApplicable)
+        {
+            w.Write($"{SyntaxFacts.GetText(lastAccessibility)} ");
+        }
+
+        Write(hierarchy.Hierarchy[^1]);
 
         return new(w, hierarchy.Hierarchy.Length);
     }

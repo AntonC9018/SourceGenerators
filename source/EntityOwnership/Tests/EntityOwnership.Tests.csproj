@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <ItemGroup>
-        <ProjectReference Include="..\SourceGenerator\EntityOwnership.SourceGenerator.csproj"/>
+        <ProjectReference Include="..\SourceGenerator\EntityOwnership.SourceGenerator.csproj" />
     </ItemGroup>
 </Project>

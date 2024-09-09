@@ -35,7 +35,7 @@ public sealed class ResultBaseAttribute(Type t) : Attribute
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly, Inherited = false, AllowMultiple = false)]
 [Conditional(Constants.ConditionString)]
-public sealed class WellKnownResultType(Type t) : Attribute
+public sealed class WellKnownResultAttribute(Type t) : Attribute
 {
     public Type Type { get; set; } = t;
 }

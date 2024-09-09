@@ -220,7 +220,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
             bool isLogger = type.FullyQualifiedName.StartsWith(loggerPrefix);
             if (isLogger)
             {
-                return ParseTypeName($"{loggerPrefix}<{info.Hierarchy.Hierarchy[0].QualifiedName}>");
+                return ParseTypeName($"{loggerPrefix}<{info.Hierarchy.Hierarchy[0].Name}>");
             }
 
             return type.AsSyntax();

@@ -25,7 +25,7 @@
         <UtilsSharedProject>$(MSBuildThisFileDirectory)Utils.Shared\Utils.Shared.csproj</UtilsSharedProject>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsTests)' == 'true'">
         <ProjectBaseName>$([System.String]::Copy($(MSBuildProjectName)).Substring(0, $([System.String]::Copy($(MSBuildProjectName)).IndexOf('.'))))</ProjectBaseName>
         <OwnSharedProject>$(MSBuildProjectDirectory)\..\Shared\$(ProjectBaseName).Shared.csproj</OwnSharedProject>
     </PropertyGroup>
@@ -68,6 +68,12 @@
             Pack="true"
             PackagePath="lib/netstandard2.0"
             Visible="true" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsTests)' == 'true'">
+        <ProjectReference
+            Condition="Exists('$(OwnSharedProject)')"
+            Include="$(OwnSharedProject)" />
     </ItemGroup>
 
     <Import

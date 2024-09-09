@@ -129,7 +129,15 @@ internal sealed class IndentedTextWriter : IDisposable
         WriteLine("{");
         IncreaseIndent();
 
-        return new(this);
+        return new(this, "");
+    }
+
+    public Block WriteBlock(string endChar)
+    {
+        WriteLine("{");
+        IncreaseIndent();
+
+        return new(this, endChar);
     }
 
     /// <summary>
@@ -373,14 +381,13 @@ internal sealed class IndentedTextWriter : IDisposable
     /// <summary>
     /// Represents an indented block that needs to be closed.
     /// </summary>
-    /// <param name="writer">The input <see cref="IndentedTextWriter"/> instance to wrap.</param>
-    public readonly struct Block(IndentedTextWriter writer) : IDisposable
+    public readonly struct Block(IndentedTextWriter writer, string endChar = "") : IDisposable
     {
         /// <inheritdoc/>
         public void Dispose()
         {
             writer.DecreaseIndent();
-            writer.WriteLine("}");
+            writer.WriteLine($"}}{endChar}");
         }
     }
 
@@ -415,8 +422,7 @@ internal sealed class IndentedTextWriter : IDisposable
 
         public void Write([InterpolatedStringHandlerArgument("")] ref ListWriteInterpolatedStringHandler handler)
         {
-            MaybeWriteSeparator();
-            _writer.Write(ref handler);
+            _isFirst = false;
         }
     }
 
@@ -428,6 +434,7 @@ internal sealed class IndentedTextWriter : IDisposable
 
         public ListWriteInterpolatedStringHandler(int literalLength, int formattedCount, ListWriter writer)
         {
+            writer.MaybeWriteSeparator();
             this.writer = new WriteInterpolatedStringHandler(literalLength, formattedCount, writer._writer);
         }
 

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 
@@ -7,6 +8,7 @@ namespace ResultTypes.SourceGenerator;
 internal sealed record Model
 {
     public required HierarchyInfo ResultHierarchy { get; init; }
+    public required Accessibility ResultAccessibility { get; init; }
     public required Overloads OkOverloads { get; init; }
     public required Overloads FailureMethods { get; init; }
 
