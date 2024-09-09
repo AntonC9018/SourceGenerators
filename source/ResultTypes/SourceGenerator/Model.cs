@@ -12,7 +12,6 @@ internal sealed record Model
 
     public readonly record struct Overloads
     {
-        public required bool HasMethodWithNoArgs { get; init; }
         public required ImmutableArray<MethodModel> Methods { get; init; }
     }
 

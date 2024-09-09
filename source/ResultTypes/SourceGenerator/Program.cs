@@ -92,7 +92,6 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
     private struct State() : IDisposable
     {
         public ResultSetsBuilder ResultSets = new ResultSetsBuilder();
-        public bool HasDefault = false;
 
         public void Dispose()
         {
@@ -169,7 +168,11 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     {
                         case []:
                         {
-                            state.HasDefault = true;
+                            state.ResultSets.Values.Add(new()
+                            {
+                                PayloadType = null,
+                                TagType = null,
+                            });
                             break;
                         }
                         case [{ } x]:
@@ -278,11 +281,20 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             using var builder = ImmutableArrayBuilder<Model.MethodModel>.Rent();
             foreach (var x in state.ResultSets.Values.WrittenSpan)
             {
-                using var acceptedTagValues = ImmutableArrayBuilder<string>.Rent();
-
-                if (x.Constants.Count > 0)
+                ImmutableArray<string> GetConstants()
                 {
-                    var members = x.TagType!.GetMembers().OfType<IFieldSymbol>().ToArray();
+                    if (x.Constants.Count == 0)
+                    {
+                        return [];
+                    }
+                    var tagType = x.TagType!;
+                    if (tagType.TypeKind != TypeKind.Enum)
+                    {
+                        return [];
+                    }
+
+                    using var acceptedTagValues = ImmutableArrayBuilder<string>.Rent();
+                    var members = tagType.GetMembers().OfType<IFieldSymbol>().ToArray();
 
                     foreach (var y in x.Constants.WrittenSpan)
                     {
@@ -296,6 +308,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                         acceptedTagValues.Add(member.Name);
                     }
+                    return acceptedTagValues.ToImmutable();
                 }
 
                 Model.TagType? GetTag()
@@ -328,13 +341,12 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 {
                     Tag = GetTag(),
                     PayloadType = x.PayloadType is null ? null : TypeSyntaxReference.From(x.PayloadType),
-                    AcceptedTagValues = acceptedTagValues.ToImmutable(),
+                    AcceptedTagValues = GetConstants(),
                 });
             }
             return new()
             {
                 Methods = builder.ToImmutable(),
-                HasMethodWithNoArgs = state.HasDefault,
             };
         }
 
@@ -451,46 +463,37 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             bool includeExceptionParam,
             Model.Overloads overloads)
         {
-            if (overloads.HasMethodWithNoArgs)
-            {
-                w.WriteLine($"public static {resultTypeInfo.Name} {defaultPrefix}()");
-                using var b = w.WriteBlock();
-                w.WriteLine($"return new()");
-                using var b1 = w.WriteBlock();
-                w.WriteLine($"Tag = new({p.Config.WellKnownTypes.FullyQualifiedName}.Ok),");
-            }
-            w.WriteLine();
-
             foreach (var m in overloads.Methods)
             {
                 w.Write($"public static {resultTypeInfo.Name} {defaultPrefix}(");
-                var list = w.List();
-
-                if (m.Tag is { } tag)
                 {
-                    w.Write($"{tag.Type} tag");
-                }
+                    var list = w.List();
 
-                if (m.PayloadType is { } payloadType)
-                {
-                    w.Write($"{payloadType} payload");
-                }
+                    if (m.Tag is { } tag)
+                    {
+                        w.Write($"{tag.Type} tag");
+                    }
 
-                if (!includeExceptionParam)
-                {
-                    list.Write("Exception? exception = null");
-                }
+                    if (m.PayloadType is { } payloadType)
+                    {
+                        w.Write($"{payloadType} payload");
+                    }
 
+                    if (!includeExceptionParam)
+                    {
+                        list.Write("Exception? exception = null");
+                    }
+                }
                 w.WriteLine(")");
+
                 {
                     using var b = w.WriteBlock();
 
-                    TagAsserts();
-                    void TagAsserts()
+                    if (m.Tag is { } tag)
                     {
-                        if (m.AcceptedTagValues.Length > 1)
+                        if (!m.AcceptedTagValues.IsEmpty)
                         {
-                            var tagType = m.Tag!.Type.FullyQualifiedName;
+                            var tagType = tag.Type.FullyQualifiedName;
                             w.Write("Debug.Assert(tag is ");
                             var list = w.List(separator: " or ");
                             foreach (var tagName in m.AcceptedTagValues)
@@ -498,6 +501,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 list.Write($"{tagType}.{tagName}");
                             }
                         }
+                    }
+                    else
+                    {
+                        w.WriteLine($"var tag = {p.Config.WellKnownTypes}.{defaultPrefix};");
                     }
 
                     w.WriteLine("return new()");
@@ -550,11 +557,13 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         // explicit casts that assert that the value is not 0 ?
         // IsOk and IsFailure ?
         Dictionary<string, TagInfo> tags = new();
-        AddForOverloads(p.Model.OkOverloads, "Ok");
-        AddForOverloads(p.Model.FailureMethods, "GenericFailure");
+        AddForOverloads(p.Model.OkOverloads, isOk: true);
+        AddForOverloads(p.Model.FailureMethods, isOk: false);
 
-        void AddForOverloads(Model.Overloads overloads, string genericTag)
+        void AddForOverloads(Model.Overloads overloads, bool isOk)
         {
+            string genericTag = isOk ? "Ok" : "GenericFailure";
+
             void AddDefault()
             {
                 var key = p.Config.WellKnownTypes.FullyQualifiedName;
@@ -564,10 +573,6 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     tags.Add(key, v);
                 }
                 v.Values.Add(genericTag);
-            }
-            if (overloads.HasMethodWithNoArgs)
-            {
-                AddDefault();
             }
             foreach (var m in overloads.Methods)
             {
@@ -600,13 +605,15 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             }
         }
 
-        w.Write("public ResultBase Value { get; }");
+        w.WriteLine("public ResultBase Value { get; }");
+        w.WriteLine("public bool IsNone => Value.IsNone;");
 
         WriteConstructors();
         WriteTryCreateWithCheck();
         WriteResultSets();
         WriteDeclares();
         WriteAsTags();
+        WriteIsOk();
 
         // Constructors
         void WriteConstructors()
@@ -645,21 +652,33 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
         void WriteTryCreateWithCheck()
         {
-            w.WriteLine($"public static {tagTypeInfo.Name}? TryCreateWithCheck(ResultBase value)");
+            w.WriteLine($"public static {tagTypeInfo.Name} TryCreateWithCheck(ResultBase value)");
             {
                 using var b = w.WriteBlock();
                 {
                     w.WriteLine("var ret = new(value);");
+                    w.WriteLine("if (value.IsNone)");
+                    using var b1 = w.WriteBlock();
+                    w.WriteLine("return ret;");
                 }
                 foreach (var t in tags)
                 {
                     using var b1 = w.WriteBlock();
                     w.WriteLine($"var r = ret.As<{t.Key}>();");
-                    w.WriteLine($"if (r is not null)");
+
+                    if (t.Value.IsEnum)
+                    {
+                        w.WriteLine($"if ((int) r != 0)");
+                    }
+                    else
+                    {
+                        w.WriteLine("if (!r.IsNone)");
+                    }
+
                     using var b2 = w.WriteBlock();
                     w.WriteLine("return ret;");
                 }
-                w.WriteLine("return null;");
+                w.WriteLine("return new(ResultBase.None);");
             }
         }
 
@@ -744,6 +763,106 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 w.WriteLine();
             }
         }
+
+        // IsOk
+        void WriteIsOk()
+        {
+            List<(string Tag, List<string> Values, bool IsEnum)> oks = new();
+
+            void TryAdd(string tag, ReadOnlySpan<string> values, bool isEnum)
+            {
+                foreach (var x in oks)
+                {
+                    if (x.Tag != tag)
+                    {
+                        continue;
+                    }
+                    if (x.Values.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    bool Contains(string value)
+                    {
+                        foreach (string v in x.Values)
+                        {
+                            if (v == value)
+                            {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+
+                    foreach (var v in values)
+                    {
+                        if (Contains(v))
+                        {
+                            continue;
+                        }
+
+                        x.Values.Add(v);
+                    }
+                    return;
+                }
+
+                oks.Add((tag, [.. values], isEnum));
+            }
+
+            foreach (var m in p.Model.OkOverloads.Methods)
+            {
+                if (m.Tag is not { } tag)
+                {
+                    TryAdd(p.Config.WellKnownTypes, ["Ok"], isEnum: true);
+                    continue;
+                }
+
+                TryAdd(
+                    tag.Type.FullyQualifiedName,
+                    m.AcceptedTagValues.AsSpan(),
+                    isEnum: tag.IsEnum);
+            }
+
+            w.WriteLine($"public bool IsOk");
+            using var b = w.WriteBlock();
+            w.WriteLine("get");
+            using var b1 = w.WriteBlock();
+
+            foreach (var ok in oks)
+            {
+                using var b2 = w.WriteBlock();
+                {
+                    w.WriteLine($"var r = As<{ok.Tag}>();");
+
+                    if (ok.IsEnum)
+                    {
+                        w.WriteLine("if ((int) r != 0)");
+                        using var b3 = w.WriteBlock();
+
+                        if (ok.Values.Count == 0)
+                        {
+                            w.WriteLine("return true;");
+                        }
+
+                        foreach (var v in ok.Values)
+                        {
+                            w.WriteLine($"if (r == {ok.Tag}.{v}");
+                            using var b4 = w.WriteBlock();
+                            w.WriteLine("return true;");
+                        }
+                    }
+                    else
+                    {
+                        w.WriteLine("if (!r.IsNone)");
+                        using var b3 = w.WriteBlock();
+                        w.WriteLine("return r.IsOk;");
+                    }
+                }
+            }
+
+            w.WriteLine("return false");
+        }
+
     }
 }
 
