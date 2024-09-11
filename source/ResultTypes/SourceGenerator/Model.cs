@@ -9,8 +9,7 @@ internal sealed record Model
 {
     public required HierarchyInfo ResultHierarchy { get; init; }
     public required Accessibility ResultAccessibility { get; init; }
-    public required Overloads OkOverloads { get; init; }
-    public required Overloads FailureMethods { get; init; }
+    public required OneForEachOverloadSet<Overloads> OverloadsSets { get; init; }
 
     public readonly record struct Overloads
     {
@@ -20,6 +19,7 @@ internal sealed record Model
     public readonly record struct MethodModel
     {
         public required TypeSyntaxReference? PayloadType { get; init; }
+        public required string? PayloadShortName { get; init; }
         public required TagType? Tag { get; init; }
         public required ImmutableArray<string> AcceptedTagValues { get; init; }
     }

@@ -127,60 +127,218 @@ public class Tests
         """);
     }
 
-    [Fact]
-    public Task Payloads()
+    private static string PayloadTestCode(
+        string definitions,
+        string methodBody)
     {
-        return _helper.Verify(Config + """
-            public readonly record struct Things(int p);
+        return $$"""
+            {{Config}}
+            {{definitions}}
+            public static partial class Helper
+            {
+                [GenerateResultType]
+                public static MyResult Stuff(int i)
+                {
+                    {{methodBody}}
+                }
+            }
+        """;
+    }
+
+    [Fact]
+    public Task StructPayload()
+    {
+        var source = PayloadTestCode(
+            "public record struct Things(int p);",
+            "return MyResult.Ok(new Things(5));");
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExceptionNotPayload_IfError()
+    {
+        var source = PayloadTestCode(
+            """
             public sealed class Exception1 : System.Exception
             {
             }
-            public enum TestTag
+            """,
+            "return MyResult.Failure(new Exception1());");
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExceptionIsPayload_IfOk()
+    {
+        var source = PayloadTestCode(
+            """
+            public sealed class Exception1 : System.Exception
+            {
+            }
+            """,
+            "return MyResult.Ok(new Exception1());");
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExceptionAndStructPayload()
+    {
+        var source = PayloadTestCode(
+            """
+            public sealed class Exception1 : System.Exception
+            {
+            }
+            public sealed class Payload
+            {
+            }
+            """,
+            "return MyResult.Failure(new Payload(), new Exception1());");
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ConstTag()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag
             {
                 None,
-                A = 1,
-                B = 2,
-                C = 3,
+                A,
+                B,
             }
-            public enum TestTag1
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Ok(Tag.A);
+            }
+            else
+            {
+                return MyResult.Failure(Tag.B);
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ConstTagAndPayload()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag
             {
                 None,
-                E = 1,
-                F = 2,
-                G = 3,
+                A,
+                B,
             }
-
-            public static partial class Helper1
+            public struct PayloadA
             {
-                // Payload
-                [GenerateResultType]
-                public static Result1 Stuff1(int i)
-                {
-                    return Result1.Ok(new Things(5));
-                }
-
-                // Const tag
-                [GenerateResultType]
-                public static Result2 Stuff2(int i)
-                {
-                    return Result2.Ok(TestTag.A);
-                }
-
-                // Const tag x 2
-                [GenerateResultType]
-                public static Result2 Stuff2(int i)
-                {
-                    return Result2.Ok(TestTag.A);
-                }
-
-                // Tag
-                [GenerateResultType]
-                public static Result2 Stuff2(int i)
-                {
-                    return Result2.Ok(TestTag.A);
-                }
-
             }
-        """);
+            public struct PayloadB
+            {
+            }
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Ok(Tag.A, new PayloadA());
+            }
+            else
+            {
+                return MyResult.Failure(Tag.B, new PayloadB());
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task MultipleTagsSinglePayload()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public enum Tag2
+            {
+                None,
+                C,
+                D,
+            }
+            public struct PayloadA
+            {
+            }
+            public struct PayloadB
+            {
+            }
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Ok(Tag1.A, new PayloadA());
+            }
+            else
+            {
+                return MyResult.Failure(Tag2.C, new PayloadB());
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task TagNonConst()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public static class TagHelper
+            {
+                public static Tag1 NonConst() => Tag1.A;
+            }
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Failure(TagHelper.NonConst());
+            }
+            else
+            {
+                return MyResult.Ok(Tag1.B);
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task TagPayloadException()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public struct PayloadA
+            {
+            }
+            public sealed class Exception1 : System.Exception
+            {
+            }
+            """,
+            """
+            return MyResult.Failure(Tag1.A, new PayloadA(), new Exception1());
+            """);
+        return _helper.Verify(source);
     }
 }

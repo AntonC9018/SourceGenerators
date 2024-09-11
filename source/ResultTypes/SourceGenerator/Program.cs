@@ -1,9 +1,10 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
@@ -153,8 +154,11 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         ? Accessibility.Public
                         : returnType.DeclaredAccessibility,
                     ResultHierarchy = GetResultHierarchy(),
-                    OkOverloads = ConvertToModel(states.Ok),
-                    FailureMethods = ConvertToModel(states.Failure),
+                    OverloadsSets = new()
+                    {
+                        Ok = ConvertToModel(states.Ok),
+                        Failure = ConvertToModel(states.Failure),
+                    },
                 };
             }
             finally
@@ -205,21 +209,21 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 {
                     case "Failure":
                     {
-                        Process(ref states.Failure, exceptionIsNotPayload: true);
+                        Process(ref states.Failure, exceptionIsPayload: false);
                         break;
                     }
 
                     case "Ok":
                     {
-                        Process(ref states.Ok, exceptionIsNotPayload: false);
+                        Process(ref states.Ok, exceptionIsPayload: true);
                         break;
                     }
                 }
 
-                void Process(ref State state, bool exceptionIsNotPayload)
+                void Process(ref State state, bool exceptionIsPayload)
                 {
                     var args = invocation.ArgumentList.Arguments;
-                    var maxCount = exceptionIsNotPayload ? 3 : 2;
+                    var maxCount = exceptionIsPayload ? 2 : 3;
                     if (args.Count > maxCount)
                     {
                         // TODO: Issue warning in an analyzer.
@@ -244,8 +248,8 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         }
                         case [{ } x]:
                         {
-                            ArgKinds kinds = ArgKinds.Const | ArgKinds.Tag;
-                            if (exceptionIsNotPayload)
+                            ArgKinds kinds = ArgKinds.Const | ArgKinds.Tag | ArgKinds.Payload;
+                            if (!exceptionIsPayload)
                             {
                                 kinds |= ArgKinds.Exception;
                             }
@@ -256,15 +260,17 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
+                            bool isPayload = result.ArgInfo.Kind == ArgKinds.Payload;
+                            bool isException = result.ArgInfo.Kind == ArgKinds.Exception;
+                            bool isTag = !isPayload && !isException;
+
                             Helper.AddOrUpdateOverload(new()
                             {
                                 CancellationToken = cancellationToken,
                                 ConstValue = result.ArgInfo.ConstValue,
-                                PayloadType = null,
+                                PayloadType = isPayload ? result.ArgInfo.Type : null,
                                 SemanticModel = context.SemanticModel,
-                                TagType = result.ArgInfo.Kind == ArgKinds.Exception
-                                    ? null
-                                    : result.ArgInfo.Type,
+                                TagType = isTag ? result.ArgInfo.Type : null,
                             }, ref state.ResultSets);
 
                             break;
@@ -280,7 +286,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             }
 
                             ArgKinds nextKinds = ArgKinds.Payload;
-                            if (exceptionIsNotPayload)
+                            if (!exceptionIsPayload)
                             {
                                 nextKinds |= ArgKinds.Exception;
                             }
@@ -336,8 +342,9 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         // tag, payload, exception
                         case [{ } x, { } x1, { } x2]:
                         {
-                            if (exceptionIsNotPayload)
+                            if (exceptionIsPayload)
                             {
+                                // TODO: Warning
                                 break;
                             }
 
@@ -363,7 +370,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             {
                                 CancellationToken = cancellationToken,
                                 ConstValue = result.ArgInfo.ConstValue,
-                                PayloadType = result2.ArgInfo.Type,
+                                PayloadType = result1.ArgInfo.Type,
                                 SemanticModel = context.SemanticModel,
                                 TagType = result.ArgInfo.Type,
                             }, ref state.ResultSets);
@@ -485,6 +492,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                 builder.Add(new()
                 {
+                    PayloadShortName = x.PayloadType?.Name,
                     Tag = GetTag(),
                     PayloadType = x.PayloadType is null ? null : TypeSyntaxReference.From(x.PayloadType),
                     AcceptedTagValues = GetConstants(),
@@ -516,99 +524,99 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         w.WriteLine($"public required {resultTypeInfo.Name}Tag Tag {{ get; init; }}");
         w.WriteLine($"public global::System.Exception? Exception {{ get; init; }}");
 
-        void WritePayloadFieldName(string defaultPrefix, Model.MethodModel m)
+        static void ComputePayloadNames(OverloadsInfo p)
         {
-            if (m.PayloadType is { } payloadType)
+            var methods = p.Model.Methods;
+            if (methods.Length == 0)
             {
-                w.Write(payloadType);
                 return;
             }
 
-            if (m.Tag is not { })
+            var payloadNames = p.PayloadNames;
+
+            bool IsMoreThanOnePayload()
             {
-                w.Write($"{defaultPrefix}Payload");
-                return;
+                bool isOnePayload = false;
+                foreach (var m in methods)
+                {
+                    if (m.PayloadType is not { })
+                    {
+                        continue;
+                    }
+                    if (isOnePayload)
+                    {
+                        return true;
+                    }
+                    isOnePayload = true;
+                }
+                return false;
             }
 
-            // Allows all values
-            if (m.AcceptedTagValues.IsEmpty)
+            bool isMoreThanOnePayload = IsMoreThanOnePayload();
+            for (int i = 0; i < methods.Length; i++)
             {
-                w.Write($"{m.Tag.ShortName}Payload");
-                return;
-            }
+                var m = methods[i];
+                if (m.PayloadType is not { })
+                {
+                    continue;
+                }
 
-            w.Write($"{m.AcceptedTagValues[0]}Payload");
+                if (!isMoreThanOnePayload)
+                {
+                    payloadNames[i] = $"{p.DefaultPrefix}Payload";
+                    continue;
+                }
+
+                if (m.Tag is not { })
+                {
+                    payloadNames[i] = $"{m.PayloadShortName}Payload";
+                    continue;
+                }
+
+                // Allows all values
+                if (m.AcceptedTagValues.IsEmpty)
+                {
+                    payloadNames[i] = $"{m.Tag.ShortName}Payload";
+                    return;
+                }
+
+                payloadNames[i] = $"{m.AcceptedTagValues[0]}Payload";
+            }
         }
 
-        void WriteOverloadFields(string defaultPrefix, Model.Overloads overloads)
+        void WritePayloadFields(
+            OverloadsInfo info,
+            HashSet<string> alreadyWrittenPayloads)
         {
-            var methods = overloads.Methods;
-            if (methods.Length > 0)
+            var methods = info.Model.Methods;
+            var payloadNames = info.PayloadNames;
+
+            for (int i = 0; i < info.PayloadNames.Length; i++)
             {
-                bool IsMoreThanOnePayload()
+                if (payloadNames[i] is not { } payloadName)
                 {
-                    bool isOnePayload = false;
-                    foreach (var m in methods)
-                    {
-                        if (m.PayloadType is not { } payloadType)
-                        {
-                            continue;
-                        }
-                        if (isOnePayload)
-                        {
-                            return true;
-                        }
-                        isOnePayload = true;
-                    }
-                    return false;
+                    continue;
                 }
-
-                if (IsMoreThanOnePayload())
+                if (!alreadyWrittenPayloads.Add(payloadName))
                 {
-                    foreach (var m in methods)
-                    {
-                        if (m.PayloadType is not { } payloadType)
-                        {
-                            continue;
-                        }
-
-                        void WriteField()
-                        {
-                            w.Write($"public {payloadType} ");
-                            WritePayloadFieldName(defaultPrefix, m);
-                        }
-
-                        WriteField();
-                        w.WriteLine(";");
-                    }
+                    continue;
                 }
-                else
-                {
-                    foreach (var m in methods)
-                    {
-                        if (m.PayloadType is not { } payloadType)
-                        {
-                            continue;
-                        }
-                        w.WriteLine($"public {payloadType} {defaultPrefix}Payload;");
-                        break;
-                    }
-                }
+                var type = methods[i].PayloadType!;
 
+                w.WriteLine($"public {type} {payloadName};");
             }
         }
 
         void WriteConstructorFunctions(
-            bool isFailure,
-            Model.Overloads overloads)
+            OverloadsInfo info)
         {
-            string defaultPrefix = isFailure ? "Failure" : "Ok";
-            string wellKnownMember = isFailure ? "GenericFailure" : "Ok";
-            bool includeExceptionParam = isFailure;
+            bool includeExceptionParam = info.IncludeExceptionParameter;
+            var overloads = info.Model;
 
-            foreach (var m in overloads.Methods)
+            for (int i = 0; i < overloads.Methods.Length; i++)
             {
-                w.Write($"public static {resultTypeInfo.Name} {defaultPrefix}(");
+                var m = overloads.Methods[i];
+                w.Write($"public static {resultTypeInfo.Name} {info.DefaultPrefix}(");
                 {
                     var list = w.List();
 
@@ -643,12 +651,13 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             {
                                 list.Write($"{tagType}.{tagName}");
                             }
+
                             w.WriteLine(");");
                         }
                     }
                     else
                     {
-                        w.WriteLine($"var tag = {p.Config.WellKnownTypes}.{wellKnownMember};");
+                        w.WriteLine($"var tag = {p.Config.WellKnownTypes}.{info.DefaultTag};");
                     }
 
                     w.WriteLine("return new()");
@@ -658,8 +667,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (m.PayloadType is not null)
                     {
-                        WritePayloadFieldName(defaultPrefix: defaultPrefix, m);
-                        w.WriteLine($" = payload,");
+                        w.WriteLine($"{info.PayloadNames[i]} = payload,");
                     }
 
                     if (includeExceptionParam)
@@ -671,10 +679,41 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             }
         }
 
-        WriteOverloadFields("Ok", p.Model.OkOverloads);
-        WriteOverloadFields("Failure", p.Model.FailureMethods);
-        WriteConstructorFunctions(isFailure: false, p.Model.OkOverloads);
-        WriteConstructorFunctions(isFailure: true, p.Model.FailureMethods);
+        using var allOverloadsContext = new AllOverloadsContext
+        {
+            Models = p.Model.OverloadsSets,
+            SharedArray = new(p.Model),
+            DefaultPrefixes = new()
+            {
+                Ok = "Ok",
+                Failure = "Failure",
+            },
+            DefaultTags = new()
+            {
+                Failure = "GenericFailure",
+                Ok = "Ok",
+            },
+        };
+
+
+        foreach (var overloadInfo in allOverloadsContext)
+        {
+            ComputePayloadNames(overloadInfo);
+        }
+
+        {
+            var writtenPayloads = new HashSet<string>();
+            foreach (var overloadsInfo in allOverloadsContext)
+            {
+                // HashSet pool?
+                WritePayloadFields(overloadsInfo, writtenPayloads);
+            }
+        }
+
+        foreach (var overloadsInfo in allOverloadsContext)
+        {
+            WriteConstructorFunctions(overloadsInfo);
+        }
 
         {
             // closes the block of the result type.
@@ -703,8 +742,8 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         // explicit casts that assert that the value is not 0 ?
         // IsOk and IsFailure ?
         Dictionary<string, TagInfo> tags = new();
-        AddForOverloads(p.Model.OkOverloads, isOk: true);
-        AddForOverloads(p.Model.FailureMethods, isOk: false);
+        AddForOverloads(p.Model.OverloadsSets.Ok, isOk: true);
+        AddForOverloads(p.Model.OverloadsSets.Failure, isOk: false);
 
         void AddForOverloads(Model.Overloads overloads, bool isOk)
         {
@@ -846,7 +885,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         // Having recursive dependencies is a nightmare in source generators.
                         // Another option is computing this at runtime (removing duplicates).
                         // This option is doable, the annoying thing is just that it's more work at runtime.
-                        w.WriteLine($".. {t.Value}.ResultSets");
+                        w.Write($".. {t.Key}.ResultSets");
                         return;
                     }
                     w.Write($"ResultBase.ResultSetOf<{t.Key}>(");
@@ -978,7 +1017,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 oks.Add((tag, [.. values], isEnum));
             }
 
-            foreach (var m in p.Model.OkOverloads.Methods)
+            foreach (var m in p.Model.OverloadsSets.Ok.Methods)
             {
                 if (m.Tag is not { } tag)
                 {
@@ -1035,3 +1074,142 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
     }
 }
 
+internal enum OverloadTag
+{
+    Ok,
+    Failure,
+    Count,
+
+    _Start = Ok,
+    _End = Failure,
+}
+
+internal struct OneForEachOverloadSet<T>
+{
+    public required T Ok;
+    public required T Failure;
+
+    [UnscopedRef]
+    public ref T Ref(OverloadTag overloadTag)
+    {
+        switch (overloadTag)
+        {
+            case OverloadTag.Ok:
+                return ref Ok;
+            case OverloadTag.Failure:
+                return ref Failure;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(overloadTag));
+        }
+    }
+
+    public TState Reduce<TState>(Func<TState, T, TState> f, TState initialState)
+    {
+        var s = initialState;
+        for (var i = OverloadTag._Start; i <= OverloadTag._End; i++)
+        {
+            s = f(s, Ref(i));
+        }
+        return s;
+    }
+}
+
+internal struct OverloadsInfo
+{
+    private readonly AllOverloadsContext All;
+    private readonly OverloadTag Tag;
+
+    public OverloadsInfo(AllOverloadsContext all, OverloadTag tag)
+    {
+        All = all;
+        Tag = tag;
+    }
+
+    public bool IncludeExceptionParameter
+    {
+        get
+        {
+            return Tag == OverloadTag.Failure;
+        }
+    }
+
+    public Model.Overloads Model => All.Models.Ref(Tag);
+    public Span<string?> PayloadNames => All.SharedArray.Array(Tag);
+    public string DefaultPrefix => All.DefaultPrefixes.Ref(Tag);
+    public string DefaultTag => All.DefaultTags.Ref(Tag);
+}
+
+internal sealed class AllOverloadsContext : IDisposable
+{
+    public required OneForEachOverloadSet<Model.Overloads> Models;
+    public required SharedArrayForEachOverloadSet<string?> SharedArray;
+    public required OneForEachOverloadSet<string> DefaultPrefixes;
+    public required OneForEachOverloadSet<string> DefaultTags;
+
+    public OverloadsInfo For(OverloadTag tag)
+    {
+        return new(this, tag);
+    }
+
+    public void Dispose()
+    {
+        SharedArray.Dispose();
+    }
+
+    public Enumerator GetEnumerator() => new(this);
+
+    public struct Enumerator
+    {
+        private readonly AllOverloadsContext _context;
+        private OverloadTag _current;
+
+        public Enumerator(AllOverloadsContext context)
+        {
+            _context = context;
+            _current = OverloadTag._Start - 1;
+        }
+
+        public OverloadsInfo Current => _context.For(_current);
+
+        public bool MoveNext()
+        {
+            _current++;
+            return _current <= OverloadTag._End;
+        }
+    }
+}
+
+internal readonly struct SharedArrayForEachOverloadSet<T> : IDisposable
+{
+    private readonly T[] _underlyingMemory;
+    private readonly Model _model;
+
+    public SharedArrayForEachOverloadSet(Model model)
+    {
+        _model = model;
+        var len = model.OverloadsSets.Reduce((a, x) => a + x.Methods.Length, 0);
+        _underlyingMemory = ArrayPool<T>.Shared.Rent(len);
+    }
+
+    public ArraySegment<T> Array(OverloadTag tag)
+    {
+        var start = tag switch
+        {
+            OverloadTag.Ok => 0,
+            OverloadTag.Failure => _model.OverloadsSets.Ok.Methods.Length,
+            _ => throw new ArgumentOutOfRangeException(nameof(tag)),
+        };
+        var len = tag switch
+        {
+            OverloadTag.Ok => _model.OverloadsSets.Ok.Methods.Length,
+            OverloadTag.Failure => _model.OverloadsSets.Failure.Methods.Length,
+            _ => throw new ArgumentOutOfRangeException(nameof(tag)),
+        };
+        return new(_underlyingMemory, start, len);
+    }
+
+    public void Dispose()
+    {
+        ArrayPool<T>.Shared.Return(_underlyingMemory!);
+    }
+}

@@ -60,9 +60,24 @@ internal sealed partial record HierarchyInfo(
 
         hierarchy.Add(self);
 
+        var ns = containerSymbol is INamespaceSymbol ? containerSymbol : containerSymbol.ContainingNamespace;
+
+        var name = self.Name;
+
+        // Check if it's the global namespace
+        if (containerSymbol is INamespaceSymbol containerNamespace
+            && !containerNamespace.IsGlobalNamespace)
+        {
+            using var builder = ImmutableArrayBuilder<char>.Rent();
+            containerNamespace.AppendFullyQualifiedMetadataName(builder);
+            builder.Add('.');
+            builder.AddRange(name.AsSpan());
+            name = builder.ToString();
+        }
+
         return new(
-            containerSymbol.GetFullyQualifiedMetadataName() + "." + self.Name,
-            containerSymbol.ContainingNamespace.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
+            name,
+            ns.ToDisplayString(new(typeQualificationStyle: NameAndContainingTypesAndNamespaces)),
             hierarchy.ToImmutable());
     }
 
