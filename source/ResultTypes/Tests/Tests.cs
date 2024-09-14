@@ -36,7 +36,7 @@ public class Tests
                 where T : struct, Enum
                 => new ResultBase((int) (object) t);
 
-            public static T As<T>(ResultBase val)
+            public T As<T>()
                 where T : struct, Enum
                 => throw new NotImplementedException();
 
@@ -164,6 +164,54 @@ public class Tests
             }
             """,
             "return MyResult.Failure(new Exception1());");
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExceptionNotPayload_IfError_WithTag()
+    {
+        var source = PayloadTestCode(
+            """
+            public sealed class Exception1 : System.Exception
+            {
+            }
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            """,
+            """
+            var tag = Tag1.A;
+            var exception = new Exception1();
+            return MyResult.Failure(tag, exception);
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExceptionNotPayload_IfError_WithNonEnumTag()
+    {
+        var source = PayloadTestCode(
+            """
+            public sealed class Exception1 : System.Exception
+            {
+            }
+            public static class Helper1
+            {
+                [GenerateResultType]
+                public static MyResult1 Thing()
+                {
+                    return MyResult1.Failure();
+                }
+            }
+            """,
+            """
+            var tag = Helper1.Thing().Tag;
+            var exception = new Exception1();
+            return MyResult.Failure(tag, exception);
+            """);
         return _helper.Verify(source);
     }
 

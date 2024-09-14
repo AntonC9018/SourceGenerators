@@ -52,12 +52,13 @@ internal static class ShouldBeAutogened
         }
     }
 
-    public static IncrementalValueProvider<T?> First<T>(this IncrementalValuesProvider<T> provider)
-        where T : struct
+    public static IncrementalValueProvider<T> First<T>(
+        this IncrementalValuesProvider<T> provider,
+        T defaultValue)
     {
         return provider
             .Collect()
-            .Select((x, _) => x.Length == 0 ? (T?) null : x[0]);
+            .Select((x, _) => x.Length == 0 ? defaultValue : x[0]);
     }
 
     public readonly record struct ConstructorArgContext
@@ -115,14 +116,15 @@ internal static class ShouldBeAutogened
             .Select((x, _) => x!.Value);
     }
 
-    public static IncrementalValueProvider<TypeSyntaxReference?> ForTypeParamOfAttributeWithName<T>(
-        this SyntaxValueProvider syntaxProvider)
+    public static IncrementalValueProvider<TypeSyntaxReference> ForTypeParamOfAttributeWithName<T>(
+        this SyntaxValueProvider syntaxProvider,
+        TypeSyntaxReference defaultValue)
     {
         return syntaxProvider
             .ForTypeConstructorArgOfAttributeOnAssembly<T, TypeSyntaxReference>(x =>
             {
                 return TypeSyntaxReference.From(x.ConstructorArgument);
             })
-            .First();
+            .First(defaultValue);
     }
 }

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -29,6 +30,11 @@ internal readonly record struct ConfigAndModel
     public required Config Config { get; init; }
 }
 
+internal readonly record struct ResultBaseConfig(
+    TypeSyntaxReference ResultBase,
+    TypeSyntaxReference ResultSet)
+{
+}
 /// <summary>
 /// A source generator creating properties for types annotated with <see cref="CachePropertyInfoAttribute"/>.
 /// </summary>
@@ -42,10 +48,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             .ForGenerateResultTypesAttribute(static (context, ct) => CreateModel(context, ct))
             .Where(x => x != null)!;
 
-        IncrementalValueProvider<Config?> config =
+        IncrementalValueProvider<Config> config =
             context.SyntaxProvider.ForTypeConstructorArgOfAttributeOnAssembly<
                     ResultBaseAttribute,
-                    (TypeSyntaxReference ResultBase, TypeSyntaxReference ResultSet)>(x =>
+                    ResultBaseConfig>(x =>
                 {
                     TypeSyntaxReference ResultSet()
                     {
@@ -56,41 +62,38 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         if (resultSetOfMethod == null)
                         {
                             // TODO: A warning is warranted as well.
-                            return new("ResultSet");
+                            return new("global::ResultTypes.ResultSet");
                         }
 
                         var returnType = resultSetOfMethod.ReturnType;
                         return new(returnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
                     }
 
-                    return (TypeSyntaxReference.From(x.ConstructorArgument), ResultSet());
+                    return new(
+                        ResultBase: TypeSyntaxReference.From(x.ConstructorArgument),
+                        ResultSet: ResultSet());
                 })
-                .First()
-                .Combine(context.SyntaxProvider.ForTypeParamOfAttributeWithName<WellKnownResultAttribute>())
+                .First(new ResultBaseConfig(
+                    ResultBase: new("global::ResultTypes.ResultBase"),
+                    ResultSet: new("global::ResultTypes.ResultSet")))
+                .Combine(
+                    context.SyntaxProvider.ForTypeParamOfAttributeWithName<WellKnownResultAttribute>(
+                        defaultValue: new TypeSyntaxReference("global::ResultTypes.WellKnownResult")))
                 .Select((x, _) =>
                 {
-                    if (x.Left is not { } left)
-                    {
-                        return null;
-                    }
-                    if (x.Right is not { } right)
-                    {
-                        return null;
-                    }
                     return new Config
                     {
-                        ResultBase = left.ResultBase,
-                        ResultSet = left.ResultSet,
-                        WellKnownTypes = right,
+                        ResultBase = x.Left.ResultBase,
+                        ResultSet = x.Left.ResultSet,
+                        WellKnownTypes = x.Right,
                     };
                 });
 
         var final = propertiesInfo
             .Combine(config)
-            .Where(x => x.Right != null)
             .Select((x, _) => new ConfigAndModel
             {
-                Config = x.Right!,
+                Config = x.Right,
                 Model = x.Left,
             });
 
@@ -133,6 +136,18 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         if (context.TargetSymbol.ReturnType is not INamedTypeSymbol returnType)
         {
             return null;
+        }
+
+        var taskType = context.SemanticModel.Compilation
+            .GetTypeByMetadataName(typeof(Task<>).FullName!)!;
+        if (returnType.OriginalDefinition.Equals(taskType, SymbolEqualityComparer.Default))
+        {
+            if (!context.TargetSymbol.IsAsync)
+            {
+                return null;
+            }
+
+            returnType = (INamedTypeSymbol) returnType.TypeArguments[0];
         }
 
         var subsetAttribute = context.SemanticModel.Compilation
@@ -267,7 +282,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             Helper.AddOrUpdateOverload(new()
                             {
                                 CancellationToken = cancellationToken,
-                                ConstValue = result.ArgInfo.ConstValue,
+                                ConstValue = isTag ? result.ArgInfo.ConstValue : null,
                                 PayloadType = isPayload ? result.ArgInfo.Type : null,
                                 SemanticModel = context.SemanticModel,
                                 TagType = isTag ? result.ArgInfo.Type : null,
@@ -331,7 +346,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                             Helper.AddOrUpdateOverload(new()
                             {
                                 CancellationToken = cancellationToken,
-                                ConstValue = result1.ArgInfo.ConstValue,
+                                ConstValue = tagType != null ? result1.ArgInfo.ConstValue : null,
                                 PayloadType = payloadType,
                                 SemanticModel = context.SemanticModel,
                                 TagType = tagType,
@@ -791,7 +806,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             }
         }
 
-        w.WriteLine("public ResultBase Value { get; }");
+        w.WriteLine($"public {p.Config.ResultBase} Value {{ get; }}");
         w.WriteLine("public readonly bool IsNone => Value.IsNone;");
 
         WriteConstructors();
@@ -804,7 +819,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         // Constructors
         void WriteConstructors()
         {
-            w.WriteLine($"private {tagTypeInfo.Name}(ResultBase tag) => Value = tag;");
+            w.WriteLine($"private {tagTypeInfo.Name}({p.Config.ResultBase} tag) => Value = tag;");
 
             foreach (var t in tags)
             {
@@ -824,7 +839,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     if (t.Value.IsEnum)
                     {
-                        w.WriteLine($"Value = ResultBase.Create<{t.Key}>(tag);");
+                        w.WriteLine($"Value = {p.Config.ResultBase}.Create<{t.Key}>(tag);");
                     }
                     else
                     {
@@ -838,7 +853,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
         void WriteTryCreateWithCheck()
         {
-            w.WriteLine($"public static {tagTypeInfo.Name} TryCreateWithCheck(ResultBase value)");
+            w.WriteLine($"public static {tagTypeInfo.Name} TryCreateWithCheck({p.Config.ResultBase} value)");
             {
                 using var b = w.WriteBlock();
                 {
@@ -864,7 +879,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     using var b2 = w.WriteBlock();
                     w.WriteLine("return ret;");
                 }
-                w.WriteLine("return new(ResultBase.None);");
+                w.WriteLine($"return new({p.Config.ResultBase}.None);");
             }
         }
 
@@ -888,7 +903,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         w.Write($".. {t.Key}.ResultSets");
                         return;
                     }
-                    w.Write($"ResultBase.ResultSetOf<{t.Key}>(");
+                    w.Write($"{p.Config.ResultBase}.ResultSetOf<{t.Key}>(");
                     if (t.Value.Values.Count != 0)
                     {
                         w.Write("[");
@@ -923,11 +938,11 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     }
                     if (t.Value.BaseSet is { } baseSet)
                     {
-                        w.WriteLine($"ResultBase.DeclareSubset<{t.Key}, {baseSet}>();");
+                        w.WriteLine($"{p.Config.ResultBase}.DeclareSubset<{t.Key}, {baseSet}>();");
                     }
                     else
                     {
-                        w.WriteLine($"ResultBase.Declare<{t.Key}>();");
+                        w.WriteLine($"{p.Config.ResultBase}.Declare<{t.Key}>();");
                     }
                 }
             }
@@ -946,7 +961,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                     using var b = w.WriteBlock();
                     if (t.Value.IsEnum)
                     {
-                        w.WriteLine($"return ResultBase.As<{t.Key}>(Value);");
+                        w.WriteLine($"return Value.As<{t.Key}>();");
                     }
                     else
                     {
