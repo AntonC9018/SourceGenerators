@@ -179,10 +179,15 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 return new()
                 {
                     Imports = imports.ToImmutable(),
+
                     ResultAccessibility = returnType.Kind == SymbolKind.ErrorType
                         ? Accessibility.Public
                         : returnType.DeclaredAccessibility,
-                    ResultHierarchy = GetResultHierarchy(),
+
+                    ResultHierarchy = GetResultHierarchy(
+                        returnType,
+                        context.TargetSymbol.ContainingType),
+
                     OverloadsSets = new()
                     {
                         Ok = ConvertToModel(states.Ok),
@@ -210,31 +215,22 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
         void TryAddResultTypeOverload(ITypeSymbol resultType, ref ResultSetsBuilder b)
         {
-            Helper.AddOrUpdateOverload(new()
-            {
-                CancellationToken = cancellationToken,
-                SemanticModel = context.SemanticModel,
-                ConstValue = null,
-                Payload = null,
-                Tag = null,
-                AssociatedResultType = resultType,
-            }, ref b);
+            Helper.AddResultOverload(resultType, ref b);
         }
 
         bool AddOrUpdateOverload(AddOrUpdateOverloadParams p, ref ResultSetsBuilder b)
         {
-            var resultPayloadType = p.Payload?.AssociatedResultType;
+            var payloadResultType = p.Payload?.AssociatedResultType;
             var tagResultType = p.Tag?.AssociatedResultType;
 
-            if (resultPayloadType != null && tagResultType != null)
+            if (payloadResultType != null && tagResultType != null)
             {
-                if (!tagResultType.Equals(resultPayloadType, SymbolEqualityComparer.Default))
+                if (!tagResultType.Equals(payloadResultType, SymbolEqualityComparer.Default))
                 {
                     return false;
                 }
             }
 
-            var associatedResultType = resultPayloadType ?? tagResultType;
             var tagType = p.Tag?.Type;
             var constVal = p.Tag?.ConstValue;
             var payloadType = p.Payload?.Type;
@@ -244,9 +240,16 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 CancellationToken = cancellationToken,
                 SemanticModel = context.SemanticModel,
                 ConstValue = constVal,
-                Payload = payloadType,
-                Tag = tagType,
-                AssociatedResultType = associatedResultType,
+                Payload = new()
+                {
+                    Type = payloadType,
+                    AssociatedResultType = payloadResultType,
+                },
+                Tag = new()
+                {
+                    Type = tagType,
+                    AssociatedResultType = tagResultType,
+                },
             }, ref b);
 
             return true;
@@ -269,194 +272,208 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 {
                     continue;
                 }
-                if (memberAccess.Expression is not IdentifierNameSyntax returnTypeIdentifier)
+
                 {
-                    continue;
-                }
-                if (returnTypeIdentifier.Identifier.Text != returnType.Name)
-                {
-                    continue;
+                    if (memberAccess.Expression is not IdentifierNameSyntax returnTypeIdentifier)
+                    {
+                        continue;
+                    }
+                    if (returnTypeIdentifier.Identifier.Text != returnType.Name)
+                    {
+                        continue;
+                    }
                 }
 
                 switch (memberAccess.Name.Identifier.Text)
                 {
                     case "Failure":
                     {
-                        Process(ref states.Failure, exceptionIsPayload: false);
+                        ProcessInvocationExpression(
+                            ref states.Failure,
+                            invocation,
+                            exceptionIsPayload: false);
                         break;
                     }
 
                     case "Ok":
                     {
-                        Process(ref states.Ok, exceptionIsPayload: true);
+                        ProcessInvocationExpression(
+                            ref states.Ok,
+                            invocation,
+                            exceptionIsPayload: true);
                         break;
-                    }
-                }
-
-                void Process(ref State state, bool exceptionIsPayload)
-                {
-                    var args = invocation.ArgumentList.Arguments;
-                    var maxCount = exceptionIsPayload ? 2 : 3;
-                    if (args.Count > maxCount)
-                    {
-                        // TODO: Issue warning in an analyzer.
-                        return;
-                    }
-
-                    void AddDefault(ref State state)
-                    {
-                        state.ResultSets.Values.Add(new()
-                        {
-                            PayloadType = null,
-                            TagType = null,
-                        });
-                    }
-
-                    switch (args)
-                    {
-                        case []:
-                        {
-                            AddDefault(ref state);
-                            break;
-                        }
-                        case [{ } x]:
-                        {
-                            ArgKinds kinds = ArgKinds.Const
-                                | ArgKinds.AllTags
-                                | ArgKinds.AllPayloads
-                                | ArgKinds.Result;
-                            if (!exceptionIsPayload)
-                            {
-                                kinds |= ArgKinds.Exception;
-                            }
-
-                            var result = MatchArg(x, kinds);
-                            if (result.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            if (result.ArgInfo.Kind == ArgKinds.Result)
-                            {
-                                TryAddResultTypeOverload(result.ArgInfo.Type, ref state.ResultSets);
-                            }
-                            else
-                            {
-                                bool isPayload = result.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
-                                bool isException = result.ArgInfo.Kind == ArgKinds.Exception;
-                                bool isTag = !isPayload && !isException;
-
-                                AddOrUpdateOverload(new()
-                                {
-                                    Tag = isTag ? result.ArgInfo : null,
-                                    Payload = isPayload ? result.ArgInfo : null,
-                                }, ref state.ResultSets);
-                            }
-
-                            break;
-                        }
-                        case [{ } x, { } x1]:
-                        {
-                            ArgKinds kinds = ArgKinds.Const | ArgKinds.AllTags;
-
-                            var result1 = MatchArg(x, kinds);
-                            if (result1.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            ArgKinds nextKinds = ArgKinds.AllPayloads;
-                            if (!exceptionIsPayload)
-                            {
-                                nextKinds |= ArgKinds.Exception;
-                            }
-
-                            var result2 = MatchArg(x1, nextKinds);
-                            if (result2.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            Helper.ArgInfo? tag;
-                            Helper.ArgInfo? payload;
-
-                            bool firstMustBeTag = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllTags | ArgKinds.Const);
-                            bool isSecondException = result2.ArgInfo.Kind == ArgKinds.Exception;
-                            bool firstMustBePayload = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
-
-                            // tag, exception
-                            if (firstMustBeTag)
-                            {
-                                tag = result1.ArgInfo;
-                                payload = isSecondException ? null : result2.ArgInfo;
-                            }
-                            // payload, exception
-                            else if (firstMustBePayload)
-                            {
-                                if (!isSecondException)
-                                {
-                                    // TODO: warning
-                                    break;
-                                }
-                                tag = null;
-                                payload = result1.ArgInfo;
-                            }
-                            // tag, payload
-                            else
-                            {
-                                tag = result1.ArgInfo;
-                                payload = result2.ArgInfo;
-                            }
-
-                            AddOrUpdateOverload(new()
-                            {
-                                Tag = tag,
-                                Payload = payload,
-                            }, ref state.ResultSets);
-
-                            break;
-                        }
-                        // tag, payload, exception
-                        case [{ } x, { } x1, { } x2]:
-                        {
-                            if (exceptionIsPayload)
-                            {
-                                // TODO: Warning
-                                break;
-                            }
-
-                            var result = MatchArg(x, ArgKinds.Const | ArgKinds.EnumTag);
-                            if (result.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            var result1 = MatchArg(x1, ArgKinds.Payload);
-                            if (result1.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            var result2 = MatchArg(x2, ArgKinds.Exception);
-                            if (result2.Failure != FindArgKindFailure.None)
-                            {
-                                break;
-                            }
-
-                            AddOrUpdateOverload(new()
-                            {
-                                Tag = result.ArgInfo,
-                                Payload = result1.ArgInfo,
-                            }, ref state.ResultSets);
-                            break;
-                        }
                     }
                 }
             }
         }
 
+        void ProcessInvocationExpression(
+            ref State state,
+            InvocationExpressionSyntax invocation,
+            bool exceptionIsPayload)
+        {
+            var args = invocation.ArgumentList.Arguments;
+            var maxCount = exceptionIsPayload ? 2 : 3;
+            if (args.Count > maxCount)
+            {
+                // TODO: Issue warning in an analyzer.
+                return;
+            }
+
+            void AddDefault(ref State state)
+            {
+                state.ResultSets.Values.Add(new()
+                {
+                    Payload = default,
+                    Tag = default,
+                });
+            }
+
+            switch (args)
+            {
+                case []:
+                {
+                    AddDefault(ref state);
+                    break;
+                }
+                case [{ } x]:
+                {
+                    var kinds = ArgKinds.Const
+                        | ArgKinds.AllTags
+                        | ArgKinds.AllPayloads
+                        | ArgKinds.Result;
+                    if (!exceptionIsPayload)
+                    {
+                        kinds |= ArgKinds.Exception;
+                    }
+
+                    var result = MatchArg(x, kinds);
+                    if (result.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    if (result.ArgInfo.Kind == ArgKinds.Result)
+                    {
+                        TryAddResultTypeOverload(result.ArgInfo.Type, ref state.ResultSets);
+                    }
+                    else
+                    {
+                        bool isPayload = result.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
+                        bool isException = result.ArgInfo.Kind == ArgKinds.Exception;
+                        bool isTag = !isPayload && !isException;
+
+                        AddOrUpdateOverload(new()
+                        {
+                            Tag = isTag ? result.ArgInfo : null,
+                            Payload = isPayload ? result.ArgInfo : null,
+                        }, ref state.ResultSets);
+                    }
+
+                    break;
+                }
+                case [{ } x, { } x1]:
+                {
+                    var kinds = ArgKinds.Const | ArgKinds.AllTags;
+
+                    var result1 = MatchArg(x, kinds);
+                    if (result1.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    var nextKinds = ArgKinds.AllPayloads;
+                    if (!exceptionIsPayload)
+                    {
+                        nextKinds |= ArgKinds.Exception;
+                    }
+
+                    var result2 = MatchArg(x1, nextKinds);
+                    if (result2.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    Helper.ArgInfo? tag;
+                    Helper.ArgInfo? payload;
+
+                    bool firstMustBeTag = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllTags | ArgKinds.Const);
+                    bool isSecondException = result2.ArgInfo.Kind == ArgKinds.Exception;
+                    bool firstMustBePayload = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
+
+                    // tag, exception
+                    if (firstMustBeTag)
+                    {
+                        tag = result1.ArgInfo;
+                        payload = isSecondException ? null : result2.ArgInfo;
+                    }
+                    // payload, exception
+                    else if (firstMustBePayload)
+                    {
+                        if (!isSecondException)
+                        {
+                            // TODO: warning
+                            break;
+                        }
+                        tag = null;
+                        payload = result1.ArgInfo;
+                    }
+                    // tag, payload
+                    else
+                    {
+                        tag = result1.ArgInfo;
+                        payload = result2.ArgInfo;
+                    }
+
+                    AddOrUpdateOverload(new()
+                    {
+                        Tag = tag,
+                        Payload = payload,
+                    }, ref state.ResultSets);
+
+                    break;
+                }
+                // tag, payload, exception
+                case [{ } x, { } x1, { } x2]:
+                {
+                    if (exceptionIsPayload)
+                    {
+                        // TODO: Warning
+                        break;
+                    }
+
+                    var result = MatchArg(x, ArgKinds.Const | ArgKinds.EnumTag);
+                    if (result.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    var result1 = MatchArg(x1, ArgKinds.Payload);
+                    if (result1.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    var result2 = MatchArg(x2, ArgKinds.Exception);
+                    if (result2.Failure != FindArgKindFailure.None)
+                    {
+                        break;
+                    }
+
+                    AddOrUpdateOverload(new()
+                    {
+                        Tag = result.ArgInfo,
+                        Payload = result1.ArgInfo,
+                    }, ref state.ResultSets);
+                    break;
+                }
+            }
+        }
+
         // If a type is already defined, we must respect its positioning.
-        HierarchyInfo GetResultHierarchy()
+        static HierarchyInfo GetResultHierarchy(
+            INamedTypeSymbol returnType,
+            INamedTypeSymbol containingType)
         {
             if (!returnType.DeclaringSyntaxReferences.IsEmpty)
             {
@@ -465,11 +482,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
             // It's not clear what to do with a default failure case?
             // Maybe it should just create like a SomeFailure member?
-            INamespaceOrTypeSymbol containerForHierarchy = context.TargetSymbol.ContainingType;
+            INamespaceOrTypeSymbol containerForHierarchy = containingType;
             if (returnType.Name != "Result")
             {
-                containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingType
-                    ?? containerForHierarchy.ContainingNamespace;
+                containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingSymbol;
             }
 
             var defaultTypeInfo = new TypeInfo(returnType.Name, TypeKind.Struct, IsRecord: true);
@@ -508,77 +524,112 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             using var builder = ImmutableArrayBuilder<Model.MethodModel>.Rent();
             foreach (var x in state.ResultSets.Values.WrittenSpan)
             {
-                ImmutableArray<string> GetConstants()
-                {
-                    if (x.Constants.Count == 0)
-                    {
-                        return [];
-                    }
-                    var tagType = x.TagType!;
-                    if (tagType.TypeKind != TypeKind.Enum)
-                    {
-                        return [];
-                    }
-
-                    using var acceptedTagValues = ImmutableArrayBuilder<string>.Rent();
-                    var members = tagType.GetMembers().OfType<IFieldSymbol>().ToArray();
-
-                    foreach (var y in x.Constants.WrittenSpan)
-                    {
-                        // get members in x.TagType with const value y
-                        var member = members.FirstOrDefault(m => (int) m.ConstantValue! == y);
-                        if (member is null)
-                        {
-                            // TODO: Issue warning
-                            continue;
-                        }
-
-                        acceptedTagValues.Add(member.Name);
-                    }
-                    return acceptedTagValues.ToImmutable();
-                }
-
-                Model.TagType? GetTag()
-                {
-                    if (x.TagType is not { } tag)
-                    {
-                        return null;
-                    }
-
-                    TypeSyntaxReference? subsetTypeRef = null;
-                    if (tag.TypeKind == TypeKind.Enum)
-                    {
-                        var subsetType = GetSubsetType(tag);
-                        if (subsetType != null)
-                        {
-                            subsetTypeRef = TypeSyntaxReference.From(subsetType);
-                        }
-                    }
-
-                    return new()
-                    {
-                        Type = new()
-                        {
-                            Type = TypeSyntaxReference.From(tag),
-                        }
-                        Type = ,
-                        ShortName = tag.Name,
-                        SupersetReference = subsetTypeRef,
-                        IsEnum = tag.TypeKind == TypeKind.Enum,
-                    };
-                }
-
                 builder.Add(new()
                 {
-                    PayloadShortName = x.PayloadType?.Name,
-                    Tag = GetTag(),
-                    PayloadType = x.PayloadType is null ? null : TypeSyntaxReference.From(x.PayloadType),
-                    AcceptedTagValues = GetConstants(),
+                    Tag = GetTag(x.Tag),
+                    Payload = GetPayload(x.Payload),
+                    AcceptedTagValues = GetConstants(x.Constants.WrittenSpan, x.Tag.Type),
                 });
+            }
+
+            using var passAlongBuilder = ImmutableArrayBuilder<TypeSyntaxReference>.Rent();
+            foreach (var x in state.ResultSets.PassedAlongResults.WrittenSpan)
+            {
+                var reference = TypeSyntaxReference.From(x);
+                passAlongBuilder.Add(reference);
+            }
+
+            return new()
+            {
+                PassAlongResults = passAlongBuilder.ToImmutable(),
+                Methods = builder.ToImmutable(),
+            };
+        }
+
+        ImmutableArray<string> GetConstants(
+            ReadOnlySpan<int> constants,
+            ITypeSymbol? tagType)
+        {
+            if (constants.Length == 0)
+            {
+                return [];
+            }
+            Debug.Assert(tagType is not null);
+
+            using var acceptedTagValues = ImmutableArrayBuilder<string>.Rent();
+            var members = tagType!.GetMembers().OfType<IFieldSymbol>().ToArray();
+
+            foreach (var y in constants)
+            {
+                // get members in x.TagType with const value y
+                var member = members.FirstOrDefault(m => (int) m.ConstantValue! == y);
+                if (member is null)
+                {
+                    // TODO: Issue warning
+                    continue;
+                }
+
+                acceptedTagValues.Add(member.Name);
+            }
+            return acceptedTagValues.ToImmutable();
+        }
+
+        Model.TagType? GetTag(
+            TypeThatMayBeAssociatedWithResultType tag)
+        {
+            if (tag == default)
+            {
+                return null;
+            }
+
+            TypeSyntaxReference? subsetTypeRef = null;
+            if (tag.Type is { } tagType
+                && tagType.TypeKind == TypeKind.Enum)
+            {
+                var subsetType = GetSubsetType(tagType);
+                if (subsetType != null)
+                {
+                    subsetTypeRef = TypeSyntaxReference.From(subsetType);
+                }
+            }
+            else
+            {
+                tagType = null;
+            }
+
+            return new()
+            {
+                Type = ConvertToTypeInfo(tag, "Tag"),
+                IsEnum = tagType?.TypeKind == TypeKind.Enum,
+                SupersetReference = subsetTypeRef,
+            };
+        }
+
+        static Model.PayloadType? GetPayload(
+            TypeThatMayBeAssociatedWithResultType payload)
+        {
+            if (payload == default)
+            {
+                return null;
             }
             return new()
             {
-                Methods = builder.ToImmutable(),
+                Type = ConvertToTypeInfo(payload, "Payload"),
+            };
+        }
+
+        static Model.TypeInfoPotentiallyFromResultType ConvertToTypeInfo(
+            TypeThatMayBeAssociatedWithResultType x,
+            string defaultPostfix)
+        {
+            Debug.Assert(x != default);
+
+            return new()
+            {
+                Type = x.Type is null ? null : TypeSyntaxReference.From(x.Type),
+                ShortName = x.Type?.Name ?? (x.AssociatedResultType!.Name + defaultPostfix),
+                AssociatedResultTypeName = x.AssociatedResultType?.Name,
+                ResultTypeQualifyingPrefix = x.AssociatedResultType?.ContainingSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             };
         }
     }
