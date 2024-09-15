@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
 using System.Linq;
 using SourceGeneration.Helpers;
 using Microsoft.CodeAnalysis;
@@ -10,24 +7,6 @@ using SourceGeneration.Models;
 
 namespace ResultTypes.SourceGenerator;
 
-internal sealed record Config
-{
-    public required TypeSyntaxReference ResultBase { get; init; }
-    public required TypeSyntaxReference WellKnownTypes { get; init; }
-    public required TypeSyntaxReference ResultSet { get; init; }
-}
-
-internal readonly record struct ConfigAndModel
-{
-    public required Model Model { get; init; }
-    public required Config Config { get; init; }
-}
-
-internal readonly record struct ResultBaseConfig(
-    TypeSyntaxReference ResultBase,
-    TypeSyntaxReference ResultSet)
-{
-}
 /// <summary>
 /// A source generator creating properties for types annotated with <see cref="CachePropertyInfoAttribute"/>.
 /// </summary>
@@ -104,7 +83,8 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
     {
         var allOverloadsContext = new AllOverloadsContext
         {
-            Models = p.Model.OverloadsSets,
+            Model = p.Model,
+            PayloadNames = new(p.Model),
             SinglePayloadIndex = default,
             DefaultPrefixes = new()
             {
@@ -118,10 +98,24 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             },
         };
 
-        foreach (var overloadInfo in allOverloadsContext)
         {
-            SetupSinglePayloadIndex(overloadInfo);
+            var resultTypeNameMap = ResultTypeToFieldNameMap.Create(allOverloadsContext);
+            foreach (var overloadInfo in allOverloadsContext)
+            {
+                PayloadHelper.SetupPayloadFieldNames(overloadInfo, resultTypeNameMap);
+            }
         }
+
+        using var tagsContext = WriteTagsContext.Create(new()
+        {
+            Config = p.Config,
+            AllOverloadsContext = allOverloadsContext,
+        });
+        using var payloadContext = WritePayloadContext.Create(new()
+        {
+            Config = p.Config,
+            AllOverloadsContext = allOverloadsContext,
+        });
 
         var resultTypeInfo = p.Model.ResultHierarchy.Hierarchy[^1];
 
@@ -133,22 +127,15 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         }
 
         WriteResult();
-        WritePayload();
 
-
-        using var tagsContext = WriteTagsContext.Create(new()
+        var commonContext = new CommonContext
         {
             Config = p.Config,
-            Model = p.Model,
-            AllOverloadsContext = allOverloadsContext,
-        });
-        tagsContext.WriteTagsType(new()
-        {
-            Config = p.Config,
-            Model = p.Model,
             Writer = w,
             AllOverloadsContext = allOverloadsContext,
-        });
+        };
+        tagsContext.WriteTagsType(commonContext);
+        payloadContext.WritePayload(commonContext);
 
         void WriteResult()
         {
@@ -156,136 +143,16 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
             w.WriteLine($"public required {resultTypeInfo.Name}Tag Tag {{ get; init; }}");
             w.WriteLine($"public global::System.Exception? Exception {{ get; init; }}");
+            w.WriteLine($"public {payloadContext.PayloadTypeName} Payload;");
 
             foreach (var overloadsInfo in allOverloadsContext)
             {
                 WriteConstructorFunctions(overloadsInfo);
             }
-
-            foreach (var overloadsInfo in allOverloadsContext)
-            {
-                if (overloadsInfo.SinglePayloadIndex == -1)
-                {
-                }
-            }
-        }
-
-        void WritePayload()
-        {
-            using var c = StartPayload();
-
-            WriteAllPayloadFields();
-        }
-
-        HierarchyCleanup StartPayload()
-        {
-            if (p.Model.SharedPayloadHierarchy is { } payloadHierarchy)
-            {
-                return w.StartHierarchy(payloadHierarchy);
-            }
-            else
-            {
-                var payloadTypeInfo = resultTypeInfo with
-                {
-                    Name = resultTypeInfo.Name + "Payload",
-                };
-                return w.StartHierarchy(
-                    p.Model.ResultHierarchy,
-                    lastAccessibility: p.Model.ResultAccessibility,
-                    lastReplacement: payloadTypeInfo);
-            }
-        }
-
-        static string? GetPayloadFieldName(in Model.Method m)
-        {
-            if (m.Payload is not { })
-            {
-                return null;
-            }
-            return m.Payload.Type.ShortName;
-        }
-
-        void SetupSinglePayloadIndex(OverloadsInfo info)
-        {
-            int SinglePayloadIndex()
-            {
-                var methods = info.Model.Methods;
-                int i = 0;
-                int index = -1;
-                while (i < methods.Length)
-                {
-                    var payload = methods[i].Payload;
-                    if (payload is not null)
-                    {
-                        index = i;
-                        i++;
-                        break;
-                    }
-                    else
-                    {
-                        i++;
-                    }
-                }
-                for (; i < methods.Length; i++)
-                {
-                    var payload = methods[i].Payload;
-                    if (payload is not null)
-                    {
-                        return -1;
-                    }
-                }
-                return index;
-            }
-
-            info.SinglePayloadIndex = SinglePayloadIndex();
-        }
-
-        void WriteAllPayloadFields()
-        {
-            bool allHaveSinglePayload = allOverloadsContext.SinglePayloadIndex
-                .Reduce(static (a, x) => a && x != -1, initialState: true);
-
-            if (!allHaveSinglePayload)
-            {
-                // HashSet pool?
-                var writtenPayloads = new HashSet<string>();
-
-                foreach (var overloadsInfo in allOverloadsContext)
-                {
-                    if (overloadsInfo.HasSinglePayload)
-                    {
-                        continue;
-                    }
-
-                    WritePayloadFields(overloadsInfo, writtenPayloads);
-                }
-            }
-        }
-
-        void WritePayloadFields(
-            OverloadsInfo info,
-            HashSet<string> alreadyWrittenPayloads)
-        {
-            var methods = info.Model.Methods;
-
-            for (int i = 0; i < methods.Length; i++)
-            {
-                if (GetPayloadFieldName(methods[i]) is not { } payloadName)
-                {
-                    continue;
-                }
-                if (!alreadyWrittenPayloads.Add(payloadName))
-                {
-                    continue;
-                }
-                var type = methods[i].Payload!.Type.QualifiedName!;
-
-                w.WriteLine($"public {type} {payloadName};");
-            }
         }
 
         void WriteConstructorFunctions(
-            OverloadsInfo info)
+            OverloadSetInfoAccessor info)
         {
             bool includeExceptionParam = info.IncludeExceptionParameter;
             var overloads = info.Model;
@@ -342,18 +209,20 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     w.WriteLine($"Tag = new(tag),");
 
-                    if (m.Payload is not null)
+                    if (m.Payload is { } payload)
                     {
-                        if (info.HasSinglePayload)
+                        if (payload.IsWholePayload)
                         {
                             w.WriteLine("Payload = payload,");
                         }
                         else
                         {
+                            var payloadName = info.PayloadNames[i]!;
+                            Debug.Assert(payloadName != null);
+
                             w.WriteLine("Payload = new()");
                             using var b2 = w.WriteBlock(",");
 
-                            var payloadName = GetPayloadFieldName(m);
                             w.WriteLine($"{payloadName} = payload,");
                         }
                     }
@@ -366,108 +235,12 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 w.WriteLine();
             }
         }
-
-
     }
 }
 
-internal enum OverloadTag
+internal readonly record struct ResultBaseConfig(
+    TypeSyntaxReference ResultBase,
+    TypeSyntaxReference ResultSet)
 {
-    Ok,
-    Failure,
-    Count,
-
-    _Start = Ok,
-    _End = Failure,
 }
 
-internal struct OneForEachOverloadSet<T>
-{
-    public required T Ok;
-    public required T Failure;
-
-    [UnscopedRef]
-    public ref T Ref(OverloadTag overloadTag)
-    {
-        switch (overloadTag)
-        {
-            case OverloadTag.Ok:
-                return ref Ok;
-            case OverloadTag.Failure:
-                return ref Failure;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(overloadTag));
-        }
-    }
-
-    public TState Reduce<TState>(Func<TState, T, TState> f, TState initialState)
-    {
-        var s = initialState;
-        for (var i = OverloadTag._Start; i <= OverloadTag._End; i++)
-        {
-            s = f(s, Ref(i));
-        }
-        return s;
-    }
-}
-
-internal struct OverloadsInfo
-{
-    private readonly AllOverloadsContext All;
-    private readonly OverloadTag Tag;
-
-    public OverloadsInfo(AllOverloadsContext all, OverloadTag tag)
-    {
-        All = all;
-        Tag = tag;
-    }
-
-    public bool IncludeExceptionParameter
-    {
-        get
-        {
-            return Tag == OverloadTag.Failure;
-        }
-    }
-
-    public Model.Overloads Model => All.Models.Ref(Tag);
-    public string DefaultPrefix => All.DefaultPrefixes.Ref(Tag);
-    public bool HasSinglePayload => SinglePayloadIndex != -1;
-    public ref int SinglePayloadIndex => ref All.SinglePayloadIndex.Ref(Tag);
-    public string DefaultTag => All.DefaultTags.Ref(Tag);
-}
-
-internal sealed class AllOverloadsContext
-{
-    public required OneForEachOverloadSet<Model.Overloads> Models;
-    public required OneForEachOverloadSet<int> SinglePayloadIndex;
-    public required OneForEachOverloadSet<string> DefaultPrefixes;
-    public required OneForEachOverloadSet<string> DefaultTags;
-
-    public OverloadsInfo For(OverloadTag tag)
-    {
-        return new(this, tag);
-    }
-
-    public Enumerator GetEnumerator() => new(this);
-
-    public struct Enumerator
-    {
-        private readonly AllOverloadsContext _context;
-        private OverloadTag _current;
-
-        public Enumerator(AllOverloadsContext context)
-        {
-            _context = context;
-            _current = OverloadTag._Start - 1;
-        }
-
-        public OverloadsInfo Current => _context.For(_current);
-
-        public bool MoveNext()
-        {
-            _current++;
-            return _current <= OverloadTag._End;
-        }
-    }
-}

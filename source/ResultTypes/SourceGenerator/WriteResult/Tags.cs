@@ -68,7 +68,7 @@ internal readonly struct WriteTagsContext : IEnumerable<TagsKvpWrapper>, IDispos
                 v.Values.Add(genericTag);
             }
 
-            var model = p.AllOverloadsContext.Models.Ref(tag);
+            var model = p.Model.OverloadsSets.Get(tag);
 
             foreach (var m in model.Methods)
             {

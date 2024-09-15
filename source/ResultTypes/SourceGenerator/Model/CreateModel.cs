@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
@@ -7,9 +8,10 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ResultTypes.Shared;
+using SourceGeneration.Extensions;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
-using TypeInfo = Microsoft.CodeAnalysis.TypeInfo;
+using TypeInfo = SourceGeneration.Models.TypeInfo;
 
 namespace ResultTypes.SourceGenerator;
 
@@ -84,6 +86,40 @@ internal static class CreateModelHelper
                     imports.Add(usingStatement.NamespaceOrType.ToString());
                 }
 
+                // Lookup type by name of returnType.Name + "Payload" in the context of the method
+                var sharedPayloadName = returnType.Name + "Payload";
+                var sharedPayloads = context.SemanticModel.LookupNamespacesAndTypes(
+                    context.TargetSyntax.SpanStart,
+                    (INamespaceOrTypeSymbol) context.TargetSymbol.ContainingType ?? context.TargetSymbol.ContainingNamespace,
+                    sharedPayloadName);
+                var sharedPayload = sharedPayloads.Length == 0 ? sharedPayloads[0] as INamedTypeSymbol : null;
+
+                var existingPayloadFieldNames = sharedPayload?
+                    .GetAllMembers()
+                    .Where(x =>
+                    {
+                        if (x is IPropertySymbol p)
+                        {
+                            return p.SetMethod is not null;
+                        }
+                        if (x is IFieldSymbol)
+                        {
+                            return true;
+                        }
+                        return false;
+                    })
+                    .ToDictionary<ISymbol, ITypeSymbol, string>(
+                        x =>
+                        {
+                            if (x is IPropertySymbol p)
+                            {
+                                return p.Type;
+                            }
+                            return ((IFieldSymbol) x).Type;
+                        },
+                        x => x.Name,
+                        SymbolEqualityComparer.Default);
+
                 return new()
                 {
                     Imports = imports.ToImmutable(),
@@ -94,12 +130,18 @@ internal static class CreateModelHelper
 
                     ResultHierarchy = GetResultHierarchy(
                         returnType,
-                        context.TargetSymbol.ContainingType),
+                        context.TargetSymbol.ContainingType!),
+
+                    SharedPayload = sharedPayload is null ? null : new()
+                    {
+                        Hierarchy = HierarchyInfo.From(sharedPayload),
+                        ExistingFields = [.. existingPayloadFieldNames!.Values],
+                    },
 
                     OverloadsSets = new()
                     {
-                        Ok = ConvertToModel(states.Ok),
-                        Failure = ConvertToModel(states.Failure),
+                        Ok = ConvertToModel(states.Ok, existingPayloadFieldNames),
+                        Failure = ConvertToModel(states.Failure, existingPayloadFieldNames),
                     },
                 };
             }
@@ -383,7 +425,7 @@ internal static class CreateModelHelper
             INamedTypeSymbol returnType,
             INamedTypeSymbol containingType)
         {
-            if (!returnType.DeclaringSyntaxReferences.IsEmpty)
+            if (returnType.TypeKind != TypeKind.Error)
             {
                 return HierarchyInfo.From(returnType);
             }
@@ -393,7 +435,8 @@ internal static class CreateModelHelper
             INamespaceOrTypeSymbol containerForHierarchy = containingType;
             if (returnType.Name != "Result")
             {
-                containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingSymbol;
+                containerForHierarchy = (INamespaceOrTypeSymbol) containerForHierarchy.ContainingType
+                    ?? containerForHierarchy.ContainingNamespace;
             }
 
             var defaultTypeInfo = new TypeInfo(returnType.Name, TypeKind.Struct, IsRecord: true);
@@ -427,7 +470,9 @@ internal static class CreateModelHelper
             return null;
         }
 
-        Model.Overloads ConvertToModel(State state)
+        Model.OverloadSet ConvertToModel(
+            State state,
+            Dictionary<ITypeSymbol, string>? existingFieldNames)
         {
             using var builder = ImmutableArrayBuilder<Model.Method>.Rent();
             foreach (var x in state.ResultSets.Values.WrittenSpan)
@@ -435,16 +480,32 @@ internal static class CreateModelHelper
                 builder.Add(new()
                 {
                     Tag = GetTag(x.Tag),
-                    Payload = GetPayload(x.Payload),
+                    Payload = GetPayload(x.Payload, returnType),
                     AcceptedTagValues = GetConstants(x.Constants.WrittenSpan, x.Tag.Type),
                 });
             }
 
-            using var passAlongBuilder = ImmutableArrayBuilder<TypeSyntaxReference>.Rent();
+            using var passAlongBuilder = ImmutableArrayBuilder<Model.PassAlongResult>.Rent();
             foreach (var x in state.ResultSets.PassedAlongResults.WrittenSpan)
             {
-                var reference = TypeSyntaxReference.From(x);
-                passAlongBuilder.Add(reference);
+                if (existingFieldNames is not null
+                    && existingFieldNames.TryGetValue(x, out var existingName))
+                {
+                }
+                else
+                {
+                    existingName = null;
+                }
+
+                passAlongBuilder.Add(new()
+                {
+                    ResultType = new()
+                    {
+                        QualifiedName = x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        ShortName = x.Name,
+                    },
+                    ExistingFieldNameInPayload = existingName,
+                });
             }
 
             return new()
@@ -514,15 +575,36 @@ internal static class CreateModelHelper
         }
 
         static Model.PayloadType? GetPayload(
-            TypeThatMayBeAssociatedWithResultType payload)
+            TypeThatMayBeAssociatedWithResultType payload,
+            INamedTypeSymbol returnType)
         {
             if (payload == default)
             {
                 return null;
             }
+
+            // TODO: If that's how we determine it, it probably shouldn't be in the model.
+            bool IsWholePayload()
+            {
+                if (payload.Type is not { } t)
+                {
+                    return false;
+                }
+                var name = t.Name.AsSpan();
+                var requiredLength = "Payload".Length + returnType.Name.Length;
+                if (name.Length != requiredLength)
+                {
+                    return false;
+                }
+
+                return name.EndsWith("Payload".AsSpan(), StringComparison.Ordinal)
+                    && name.StartsWith(returnType.Name.AsSpan(), StringComparison.Ordinal);
+            }
+
             return new()
             {
                 Type = ConvertToTypeInfo(payload, "Payload"),
+                IsWholePayload = IsWholePayload(),
             };
         }
 
@@ -554,10 +636,7 @@ internal static class CreateModelHelper
             {
                 QualifiedName = Type(),
                 ShortName = shortName,
-                AssociatedResultTypeName = x.AssociatedResultType?.Name,
-                ResultTypeQualifyingPrefix = resultTypeQualifyingPrefix,
             };
         }
     }
-
 }
