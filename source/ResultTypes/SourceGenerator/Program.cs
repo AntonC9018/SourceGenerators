@@ -129,7 +129,13 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         }
     }
 
-    private static Model? CreateModel(
+    private struct AddOrUpdateOverloadParams
+    {
+        public Helper.ArgInfo? Tag { get; init; }
+        public Helper.ArgInfo? Payload { get; init; }
+    }
+
+    private static async ValueTask<Model?> CreateModel(
         ShouldBeAutogened.TypedGeneratorContext context,
         CancellationToken cancellationToken)
     {
@@ -163,8 +169,16 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             {
                 ProcessReturnSyntaxes(ref states);
 
+                var imports = ImmutableArrayBuilder<string>.Rent();
+                var root = await context.TargetSymbol.DeclaringSyntaxReferences[0].SyntaxTree.GetRootAsync(cancellationToken);
+                foreach (var usingStatement in root.DescendantNodes().OfType<UsingDirectiveSyntax>())
+                {
+                    imports.Add(usingStatement.NamespaceOrType.ToString());
+                }
+
                 return new()
                 {
+                    Imports = imports.ToImmutable(),
                     ResultAccessibility = returnType.Kind == SymbolKind.ErrorType
                         ? Accessibility.Public
                         : returnType.DeclaredAccessibility,
@@ -192,6 +206,50 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                 PossibleKinds = kinds,
                 SemanticModel = context.SemanticModel,
             });
+        }
+
+        void TryAddResultTypeOverload(ITypeSymbol resultType, ref ResultSetsBuilder b)
+        {
+            Helper.AddOrUpdateOverload(new()
+            {
+                CancellationToken = cancellationToken,
+                SemanticModel = context.SemanticModel,
+                ConstValue = null,
+                Payload = null,
+                Tag = null,
+                AssociatedResultType = resultType,
+            }, ref b);
+        }
+
+        bool AddOrUpdateOverload(AddOrUpdateOverloadParams p, ref ResultSetsBuilder b)
+        {
+            var resultPayloadType = p.Payload?.AssociatedResultType;
+            var tagResultType = p.Tag?.AssociatedResultType;
+
+            if (resultPayloadType != null && tagResultType != null)
+            {
+                if (!tagResultType.Equals(resultPayloadType, SymbolEqualityComparer.Default))
+                {
+                    return false;
+                }
+            }
+
+            var associatedResultType = resultPayloadType ?? tagResultType;
+            var tagType = p.Tag?.Type;
+            var constVal = p.Tag?.ConstValue;
+            var payloadType = p.Payload?.Type;
+
+            Helper.AddOrUpdateOverload(new()
+            {
+                CancellationToken = cancellationToken,
+                SemanticModel = context.SemanticModel,
+                ConstValue = constVal,
+                Payload = payloadType,
+                Tag = tagType,
+                AssociatedResultType = associatedResultType,
+            }, ref b);
+
+            return true;
         }
 
         void ProcessReturnSyntaxes(ref States states)
@@ -263,7 +321,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         }
                         case [{ } x]:
                         {
-                            ArgKinds kinds = ArgKinds.Const | ArgKinds.Tag | ArgKinds.Payload;
+                            ArgKinds kinds = ArgKinds.Const
+                                | ArgKinds.AllTags
+                                | ArgKinds.AllPayloads
+                                | ArgKinds.Result;
                             if (!exceptionIsPayload)
                             {
                                 kinds |= ArgKinds.Exception;
@@ -275,24 +336,28 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
-                            bool isPayload = result.ArgInfo.Kind == ArgKinds.Payload;
-                            bool isException = result.ArgInfo.Kind == ArgKinds.Exception;
-                            bool isTag = !isPayload && !isException;
-
-                            Helper.AddOrUpdateOverload(new()
+                            if (result.ArgInfo.Kind == ArgKinds.Result)
                             {
-                                CancellationToken = cancellationToken,
-                                ConstValue = isTag ? result.ArgInfo.ConstValue : null,
-                                PayloadType = isPayload ? result.ArgInfo.Type : null,
-                                SemanticModel = context.SemanticModel,
-                                TagType = isTag ? result.ArgInfo.Type : null,
-                            }, ref state.ResultSets);
+                                TryAddResultTypeOverload(result.ArgInfo.Type, ref state.ResultSets);
+                            }
+                            else
+                            {
+                                bool isPayload = result.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
+                                bool isException = result.ArgInfo.Kind == ArgKinds.Exception;
+                                bool isTag = !isPayload && !isException;
+
+                                AddOrUpdateOverload(new()
+                                {
+                                    Tag = isTag ? result.ArgInfo : null,
+                                    Payload = isPayload ? result.ArgInfo : null,
+                                }, ref state.ResultSets);
+                            }
 
                             break;
                         }
                         case [{ } x, { } x1]:
                         {
-                            ArgKinds kinds = ArgKinds.Const | ArgKinds.TagOrPayload;
+                            ArgKinds kinds = ArgKinds.Const | ArgKinds.AllTags;
 
                             var result1 = MatchArg(x, kinds);
                             if (result1.Failure != FindArgKindFailure.None)
@@ -300,7 +365,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
-                            ArgKinds nextKinds = ArgKinds.Payload;
+                            ArgKinds nextKinds = ArgKinds.AllPayloads;
                             if (!exceptionIsPayload)
                             {
                                 nextKinds |= ArgKinds.Exception;
@@ -312,18 +377,18 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
-                            ITypeSymbol? tagType;
-                            ITypeSymbol? payloadType;
+                            Helper.ArgInfo? tag;
+                            Helper.ArgInfo? payload;
 
-                            bool firstMustBeTag = result1.ArgInfo.Kind is ArgKinds.Const or ArgKinds.Tag;
+                            bool firstMustBeTag = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllTags | ArgKinds.Const);
                             bool isSecondException = result2.ArgInfo.Kind == ArgKinds.Exception;
-                            bool firstMustBePayload = result1.ArgInfo.Kind == ArgKinds.Payload;
+                            bool firstMustBePayload = result1.ArgInfo.Kind.HasEitherOf(ArgKinds.AllPayloads);
 
                             // tag, exception
                             if (firstMustBeTag)
                             {
-                                tagType = result1.ArgInfo.Type;
-                                payloadType = isSecondException ? null : result2.ArgInfo.Type;
+                                tag = result1.ArgInfo;
+                                payload = isSecondException ? null : result2.ArgInfo;
                             }
                             // payload, exception
                             else if (firstMustBePayload)
@@ -333,23 +398,20 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                     // TODO: warning
                                     break;
                                 }
-                                tagType = null;
-                                payloadType = result1.ArgInfo.Type;
+                                tag = null;
+                                payload = result1.ArgInfo;
                             }
                             // tag, payload
                             else
                             {
-                                tagType = result1.ArgInfo.Type;
-                                payloadType = result2.ArgInfo.Type;
+                                tag = result1.ArgInfo;
+                                payload = result2.ArgInfo;
                             }
 
-                            Helper.AddOrUpdateOverload(new()
+                            AddOrUpdateOverload(new()
                             {
-                                CancellationToken = cancellationToken,
-                                ConstValue = tagType != null ? result1.ArgInfo.ConstValue : null,
-                                PayloadType = payloadType,
-                                SemanticModel = context.SemanticModel,
-                                TagType = tagType,
+                                Tag = tag,
+                                Payload = payload,
                             }, ref state.ResultSets);
 
                             break;
@@ -363,7 +425,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
-                            var result = MatchArg(x, ArgKinds.Const | ArgKinds.Tag);
+                            var result = MatchArg(x, ArgKinds.Const | ArgKinds.EnumTag);
                             if (result.Failure != FindArgKindFailure.None)
                             {
                                 break;
@@ -381,13 +443,10 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                                 break;
                             }
 
-                            Helper.AddOrUpdateOverload(new()
+                            AddOrUpdateOverload(new()
                             {
-                                CancellationToken = cancellationToken,
-                                ConstValue = result.ArgInfo.ConstValue,
-                                PayloadType = result1.ArgInfo.Type,
-                                SemanticModel = context.SemanticModel,
-                                TagType = result.ArgInfo.Type,
+                                Tag = result.ArgInfo,
+                                Payload = result1.ArgInfo,
                             }, ref state.ResultSets);
                             break;
                         }
@@ -498,7 +557,11 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
                     return new()
                     {
-                        Type = TypeSyntaxReference.From(tag),
+                        Type = new()
+                        {
+                            Type = TypeSyntaxReference.From(tag),
+                        }
+                        Type = ,
                         ShortName = tag.Name,
                         SupersetReference = subsetTypeRef,
                         IsEnum = tag.TypeKind == TypeKind.Enum,

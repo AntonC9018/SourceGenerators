@@ -1,7 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Linq.Expressions;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,78 +7,11 @@ using SourceGeneration.Helpers;
 
 namespace ResultTypes.SourceGenerator;
 
-internal static class GetErrorValueHelper
-{
-    public enum ResultKind
-    {
-        Ok,
-        ConstantNotInt,
-        NoArgumentType,
-    }
-
-    public readonly record struct Result
-    {
-        public ResultKind ResultKind { get; init; }
-        public ResultSetUsage Usage { get; init; }
-
-        public static Result Failure(ResultKind failure)
-        {
-            Debug.Assert(failure != ResultKind.Ok);
-            return new()
-            {
-                ResultKind = failure,
-            };
-        }
-
-        public static Result Ok(ResultSetUsage usage)
-        {
-            return new()
-            {
-                ResultKind = ResultKind.Ok,
-                Usage = usage,
-            };
-        }
-    }
-
-    public readonly record struct Params
-    {
-        public required ArgumentSyntax Argument { get; init; }
-        public required SemanticModel SemanticModel { get; init; }
-        public required CancellationToken CancellationToken { get; init; }
-    }
-
-    public static Result Get(Params p)
-    {
-        var constant = p.SemanticModel.GetConstantValue(p.Argument.Expression, p.CancellationToken);
-        int? constValue = null;
-        if (constant.HasValue)
-        {
-            if (constant.Value is not int i)
-            {
-                return Result.Failure(ResultKind.ConstantNotInt);
-            }
-            constValue = i;
-        }
-
-        var paramType = p.SemanticModel.GetTypeInfo(p.Argument.Expression, p.CancellationToken).Type;
-        if (paramType is null)
-        {
-            return Result.Failure(ResultKind.NoArgumentType);
-        }
-
-        return Result.Ok(new()
-        {
-            Type = paramType,
-            ConstValue = constValue,
-        });
-    }
-}
-
 internal struct OverloadBuilder() : IDisposable
 {
-    public ITypeSymbol? TagType { get; set; }
-    public ITypeSymbol? PayloadType { get; set; }
-    public ImmutableArrayBuilder<int> Constants { get; init; } = ImmutableArrayBuilder<int>.Rent();
+    public TypeThatMayBeAssociatedWithResultType Tag { get; set; }
+    public TypeThatMayBeAssociatedWithResultType Payload { get; set; }
+    public ImmutableArrayBuilder<int> Constants = ImmutableArrayBuilder<int>.Rent();
 
     public void Dispose()
     {
@@ -91,6 +22,7 @@ internal struct OverloadBuilder() : IDisposable
 internal struct ResultSetsBuilder() : IDisposable
 {
     public ImmutableArrayBuilder<OverloadBuilder> Values = ImmutableArrayBuilder<OverloadBuilder>.Rent();
+    public ImmutableArrayBuilder<ITypeSymbol> PassedAlongResults = ImmutableArrayBuilder<ITypeSymbol>.Rent();
 
     public void Dispose()
     {
@@ -98,18 +30,33 @@ internal struct ResultSetsBuilder() : IDisposable
     }
 }
 
-
-internal readonly record struct ResultSetUsage(ITypeSymbol Type, int? ConstValue);
-
 [Flags]
 internal enum ArgKinds
 {
     None,
     Payload = 1 << 0,
     Const = 1 << 1,
-    Tag = 1 << 2,
-    TagOrPayload = Tag | Payload,
+    EnumTag = 1 << 2,
+    ResultTag = 1 << 5,
+    ResultPayload = 1 << 7,
+    Result = 1 << 6,
     Exception = 1 << 3,
+
+    AllTags = EnumTag | ResultTag,
+    AllPayloads = Payload | ResultPayload,
+}
+
+internal static class ArgKindsHelper
+{
+    public static bool HasAllOf(this ArgKinds kinds, ArgKinds required)
+    {
+        return (kinds & required) == required;
+    }
+
+    public static bool HasEitherOf(this ArgKinds kinds, ArgKinds required)
+    {
+        return (kinds & required) != 0;
+    }
 }
 
 internal enum FindArgKindFailure
@@ -119,6 +66,13 @@ internal enum FindArgKindFailure
     NoArgumentType,
     NoMatch,
 }
+
+public readonly record struct TypeThatMayBeAssociatedWithResultType
+{
+    public required ITypeSymbol? Type { get; init; }
+    public required ITypeSymbol? AssociatedResultType { get; init; }
+}
+
 
 internal static class Helper
 {
@@ -136,6 +90,7 @@ internal static class Helper
     {
         public ArgKinds Kind { get; init; }
         public ITypeSymbol Type { get; init; }
+        public ITypeSymbol? AssociatedResultType { get; init; }
         public int? ConstValue { get; init; }
     }
 
@@ -145,8 +100,78 @@ internal static class Helper
         public ArgInfo ArgInfo { get; init; }
     }
 
-    public static FindArgKindResult MatchArg(in FindArgKindParams p)
+    public static FindArgKindResult MatchArg(FindArgKindParams p)
     {
+        (INamedTypeSymbol ResultType, INamedTypeSymbol? Type)? TryExtractResultTypeOfTagOrPayload(bool tag)
+        {
+            if (p.Argument.Expression is not MemberAccessExpressionSyntax memberAccess)
+            {
+                return null;
+            }
+
+            if (tag)
+            {
+                if (memberAccess.Name.Identifier.Text != "Tag")
+                {
+                    return null;
+                }
+            }
+            // Payload
+            else
+            {
+                if (!memberAccess.Name.Identifier.Text.EndsWith("Payload"))
+                {
+                    return null;
+                }
+            }
+
+            var maybeResultType = p.SemanticModel.GetTypeInfo(memberAccess.Expression).Type;
+            if (maybeResultType is not INamedTypeSymbol resultType)
+            {
+                return null;
+            }
+
+            var valueType = p.SemanticModel.GetTypeInfo(p.Argument.Expression).Type as INamedTypeSymbol;
+            if (valueType?.TypeKind == TypeKind.Error)
+            {
+                valueType = null;
+            }
+
+            return (resultType, valueType);
+        }
+
+        if (p.PossibleKinds.HasAllOf(ArgKinds.ResultTag))
+        {
+            if (TryExtractResultTypeOfTagOrPayload(tag: true) is { } resultType1)
+            {
+                return new()
+                {
+                    ArgInfo = new()
+                    {
+                        Kind = ArgKinds.ResultTag,
+                        Type = resultType1.Type,
+                        AssociatedResultType = resultType1.ResultType,
+                    },
+                };
+            }
+        }
+
+        if (p.PossibleKinds.HasAllOf(ArgKinds.ResultPayload))
+        {
+            if (TryExtractResultTypeOfTagOrPayload(tag: false) is { } resultType1)
+            {
+                return new()
+                {
+                    ArgInfo = new()
+                    {
+                        Kind = ArgKinds.ResultPayload,
+                        Type = resultType1.Type,
+                        AssociatedResultType = resultType1.ResultType,
+                    },
+                };
+            }
+        }
+
         var type = p.SemanticModel.GetTypeInfo(p.Argument.Expression).Type;
         if (type is null)
         {
@@ -156,7 +181,7 @@ internal static class Helper
             };
         }
 
-        if ((p.PossibleKinds & ArgKinds.Const) != 0)
+        if (p.PossibleKinds.HasAllOf(ArgKinds.Const))
         {
             var constant = p.SemanticModel.GetConstantValue(p.Argument.Expression, p.CancellationToken);
             if (constant.HasValue)
@@ -184,7 +209,7 @@ internal static class Helper
             }
         }
 
-        if ((p.PossibleKinds & ArgKinds.Exception) != 0)
+        if (p.PossibleKinds.HasAllOf(ArgKinds.Exception))
         {
             bool IsException(INamedTypeSymbol exceptionType, ITypeSymbol typeSymbol)
             {
@@ -218,7 +243,7 @@ internal static class Helper
             }
         }
 
-        if ((p.PossibleKinds & ArgKinds.Payload) != 0)
+        if (p.PossibleKinds.HasAllOf(ArgKinds.Payload))
         {
             bool isCertainlyPayload = p.Argument.Expression is ObjectCreationExpressionSyntax;
             if (isCertainlyPayload)
@@ -234,32 +259,59 @@ internal static class Helper
             }
         }
 
-        if ((p.PossibleKinds & ArgKinds.Tag) != 0)
+        if (p.PossibleKinds.HasAllOf(ArgKinds.EnumTag) && type.TypeKind == TypeKind.Enum)
         {
-            bool includePayload = type.TypeKind != TypeKind.Enum && (p.PossibleKinds & ArgKinds.Tag) != 0;
-            var kind = ArgKinds.Tag;
-            if (includePayload)
+            return new()
             {
-                kind |= ArgKinds.Payload;
+                ArgInfo = new()
+                {
+                    Kind = ArgKinds.EnumTag,
+                    Type = type,
+                },
+            };
+        }
+
+        if (p.PossibleKinds.HasAllOf(ArgKinds.Payload | ArgKinds.Result))
+        {
+            // We got ourselves a tie, need to do more convention-based rules.
+            ArgKinds DetermineKind()
+            {
+                if (type.Name.EndsWith("Result"))
+                {
+                    return ArgKinds.Result;
+                }
+                if (type.Name.EndsWith("Payload"))
+                {
+                    return ArgKinds.Payload;
+                }
+
+                // If it's generated, it's probably a result.
+                if (type.TypeKind == TypeKind.Error)
+                {
+                    return ArgKinds.Result;
+                }
+
+                return ArgKinds.Payload;
             }
 
             return new()
             {
                 ArgInfo = new()
                 {
-                    Kind = kind,
+                    Kind = DetermineKind(),
                     Type = type,
                 },
             };
         }
 
-        if ((p.PossibleKinds & ArgKinds.Payload) != 0)
+        var payloadOrResult = p.PossibleKinds & (ArgKinds.Payload | ArgKinds.Result);
+        if (payloadOrResult != 0)
         {
             return new()
             {
                 ArgInfo = new()
                 {
-                    Kind = ArgKinds.Payload,
+                    Kind = payloadOrResult,
                     Type = type,
                 },
             };
@@ -277,75 +329,41 @@ internal static class Helper
 
     public readonly record struct AddOrUpdateOverloadParams
     {
-        public required ITypeSymbol? PayloadType { get; init; }
-        public required ITypeSymbol? TagType { get; init; }
+        public required TypeThatMayBeAssociatedWithResultType Payload { get; init; }
+        public required TypeThatMayBeAssociatedWithResultType Tag { get; init; }
         public required int? ConstValue { get; init; }
         public required SemanticModel SemanticModel { get; init; }
         public required CancellationToken CancellationToken { get; init; }
+    }
+
+    public static void AddResultOverload(
+        ITypeSymbol resultType,
+        ref ResultSetsBuilder builder)
+    {
+        ref var resultBuilders = ref builder.PassedAlongResults;
+        var results = resultBuilders.WrittenSpan;
+        for (int i = 0; i < results.Length; i++)
+        {
+            if (results[i].Equals(resultType, SymbolEqualityComparer.Default))
+            {
+                return;
+            }
+        }
+
+        resultBuilders.Add(resultType);
+        return;
     }
 
     public static void AddOrUpdateOverload(
         AddOrUpdateOverloadParams p,
         ref ResultSetsBuilder builder)
     {
-        bool UpdateOverload(ref ResultSetsBuilder b)
-        {
-            var builders = b.Values.WrittenSpan;
-            for (int i = 0; i < builders.Length; i++)
-            {
-                if (p.PayloadType is { } requiredPayload)
-                {
-                    if (builders[i].PayloadType is not { } payloadType)
-                    {
-                        continue;
-                    }
-                    if (!payloadType.Equals(requiredPayload, SymbolEqualityComparer.Default))
-                    {
-                        continue;
-                    }
-                }
-                if (p.TagType is { } requiredTag)
-                {
-                    if (builders[i].TagType is not { } tagType)
-                    {
-                        continue;
-                    }
-                    if (!tagType.Equals(requiredTag, SymbolEqualityComparer.Default))
-                    {
-                        continue;
-                    }
-                    if (builders[i].Constants.Count == 0)
-                    {
-                        return true;
-                    }
-                    if (p.ConstValue is { } constValue)
-                    {
-                        foreach (var it in builders[i].Constants.WrittenSpan)
-                        {
-                            if (it == constValue)
-                            {
-                                return true;
-                            }
-                        }
-                        builders[i].Constants.Add(constValue);
-                        return true;
-                    }
-                    else
-                    {
-                        builders[i].Constants.Clear();
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
         if (!UpdateOverload(ref builder))
         {
             builder.Values.Add(new()
             {
-                PayloadType = p.PayloadType,
-                TagType = p.TagType,
+                Tag = p.Tag,
+                Payload = p.Payload,
             });
 
             if (p.ConstValue is { } i)
@@ -353,5 +371,94 @@ internal static class Helper
                 builder.Values.WrittenSpan[^1].Constants.Add(i);
             }
         }
+
+        bool UpdateOverload(ref ResultSetsBuilder resultSetBuilder)
+        {
+            var builders = resultSetBuilder.Values.WrittenSpan;
+            foreach (ref var b in builders)
+            {
+                if (!IsSame(p.Payload, b.Payload))
+                {
+                    continue;
+                }
+                if (!IsSame(p.Tag, b.Tag))
+                {
+                    continue;
+                }
+
+                b.Payload = TakeNonNulls(b.Payload, p.Payload);
+                b.Tag = TakeNonNulls(b.Tag, p.Tag);
+
+                UpdateConstants(ref b.Constants, p.ConstValue);
+            }
+            return false;
+        }
+
+        static void UpdateConstants(
+            ref ImmutableArrayBuilder<int> constants,
+            int? maybeConstValue)
+        {
+            if (constants.Count == 0)
+            {
+                return;
+            }
+            if (maybeConstValue is { } constValue)
+            {
+                foreach (var it in constants.WrittenSpan)
+                {
+                    if (it == constValue)
+                    {
+                        return;
+                    }
+                }
+                constants.Add(constValue);
+            }
+            else
+            {
+                constants.Clear();
+            }
+        }
+
+        static bool IsSame(
+            TypeThatMayBeAssociatedWithResultType a,
+            TypeThatMayBeAssociatedWithResultType b)
+        {
+            if (a.Type is null && b.Type is null)
+            {
+                return SymbolEqualityComparer.Default.Equals(a.AssociatedResultType, b.AssociatedResultType);
+            }
+
+            static bool ShouldCompareResults1(
+                TypeThatMayBeAssociatedWithResultType a,
+                TypeThatMayBeAssociatedWithResultType b)
+            {
+                if (a.Type is null
+                    && b.Type is not null
+                    && a.AssociatedResultType is not null)
+                {
+                    return true;
+                }
+                return false;
+            }
+
+            if (ShouldCompareResults1(a, b) || ShouldCompareResults1(b, a))
+            {
+                return SymbolEqualityComparer.Default.Equals(a.AssociatedResultType, b.AssociatedResultType);
+            }
+
+            return SymbolEqualityComparer.Default.Equals(a.Type, b.Type);
+        }
+
+        static TypeThatMayBeAssociatedWithResultType TakeNonNulls(
+            TypeThatMayBeAssociatedWithResultType a,
+            TypeThatMayBeAssociatedWithResultType b)
+        {
+            return new()
+            {
+                Type = a.Type ?? b.Type,
+                AssociatedResultType = a.AssociatedResultType ?? b.AssociatedResultType,
+            };
+        }
+
     }
 }
