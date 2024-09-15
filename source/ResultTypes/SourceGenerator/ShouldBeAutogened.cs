@@ -14,13 +14,16 @@ internal static class ShouldBeAutogened
     {
         public readonly SemanticModel SemanticModel;
         public readonly IMethodSymbol TargetSymbol;
+        public readonly MethodDeclarationSyntax TargetSyntax;
 
         public TypedGeneratorContext(
             IMethodSymbol targetSymbol,
-            SemanticModel semanticModel)
+            SemanticModel semanticModel,
+            MethodDeclarationSyntax targetSyntax)
         {
             TargetSymbol = targetSymbol;
             SemanticModel = semanticModel;
+            TargetSyntax = targetSyntax;
         }
     }
 
@@ -34,7 +37,8 @@ internal static class ShouldBeAutogened
             (context, cancellationToken) =>
             {
                 var s = (IMethodSymbol) context.TargetSymbol;
-                return valueFactory(new(s, context.SemanticModel), cancellationToken);
+                var syntax = (MethodDeclarationSyntax) context.TargetNode;
+                return valueFactory(new(s, context.SemanticModel, syntax), cancellationToken);
             });
     }
 
