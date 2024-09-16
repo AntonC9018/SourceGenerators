@@ -57,6 +57,11 @@ internal static class ArgKindsHelper
     {
         return (kinds & required) != 0;
     }
+
+    public static bool HasNeitherOf(this ArgKinds kinds, ArgKinds required)
+    {
+        return (kinds & required) == 0;
+    }
 }
 
 internal enum FindArgKindFailure
@@ -89,7 +94,7 @@ internal static class Helper
     public readonly record struct ArgInfo
     {
         public ArgKinds Kind { get; init; }
-        public ITypeSymbol Type { get; init; }
+        public ITypeSymbol? Type { get; init; }
         public ITypeSymbol? AssociatedResultType { get; init; }
         public int? ConstValue { get; init; }
     }
@@ -390,6 +395,7 @@ internal static class Helper
                 b.Tag = TakeNonNulls(b.Tag, p.Tag);
 
                 UpdateConstants(ref b.Constants, p.ConstValue);
+                return true;
             }
             return false;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
 namespace ResultTypes.SourceGenerator;
@@ -62,7 +63,7 @@ internal struct OneForEachOverloadSet<T>
 internal struct OverloadSetInfoAccessor
 {
     private readonly AllOverloadsContext All;
-    private readonly OverloadTag Tag;
+    public readonly OverloadTag Tag;
 
     public OverloadSetInfoAccessor(AllOverloadsContext all, OverloadTag tag)
     {
@@ -81,14 +82,15 @@ internal struct OverloadSetInfoAccessor
     public Model.OverloadSet Model => All.Model.OverloadsSets.Get(Tag);
     public string DefaultPrefix => All.DefaultPrefixes.Ref(Tag);
     public Span<string?> PayloadNames => All.PayloadNames.Array(All.Model, Tag);
+    public Span<string> ResultPayloadNames => All.ResultPayloadNames.Array(All.Model, Tag);
     public string DefaultTag => All.DefaultTags.Ref(Tag);
 }
 
 internal sealed class AllOverloadsContext
 {
     public required Model Model;
-    public required OneForEachOverloadSet<int> SinglePayloadIndex;
     public required SharedArrayForEachOverloadSet<string?> PayloadNames;
+    public required SharedArrayForEachOverloadSet<string> ResultPayloadNames;
     public required OneForEachOverloadSet<string> DefaultPrefixes;
     public required OneForEachOverloadSet<string> DefaultTags;
 
@@ -123,10 +125,16 @@ internal sealed class AllOverloadsContext
 internal readonly struct SharedArrayForEachOverloadSet<T> : IDisposable
 {
     private readonly T[] _underlyingMemory;
+    private readonly Func<Model, OverloadTag, int> _getLength;
 
-    public SharedArrayForEachOverloadSet(Model model)
+    public SharedArrayForEachOverloadSet(Model model, Func<Model, OverloadTag, int> getLength)
     {
-        var len = model.OverloadsSets.Reduce((a, x) => a + x.Methods.Length, 0);
+        int len = 0;
+        for (var t = OverloadTag._Start; t <= OverloadTag._End; t++)
+        {
+            len += getLength(model, t);
+        }
+        _getLength = getLength;
         _underlyingMemory = ArrayPool<T>.Shared.Rent(len);
     }
 
@@ -135,13 +143,13 @@ internal readonly struct SharedArrayForEachOverloadSet<T> : IDisposable
         var start = tag switch
         {
             OverloadTag.Ok => 0,
-            OverloadTag.Failure => model.OverloadsSets.Ok.Methods.Length,
+            OverloadTag.Failure => _getLength(model, OverloadTag.Ok),
             _ => throw new ArgumentOutOfRangeException(nameof(tag)),
         };
         var len = tag switch
         {
-            OverloadTag.Ok => model.OverloadsSets.Ok.Methods.Length,
-            OverloadTag.Failure => model.OverloadsSets.Failure.Methods.Length,
+            OverloadTag.Ok => _getLength(model, OverloadTag.Ok),
+            OverloadTag.Failure => _getLength(model, OverloadTag.Failure),
             _ => throw new ArgumentOutOfRangeException(nameof(tag)),
         };
         return new(_underlyingMemory, start, len);

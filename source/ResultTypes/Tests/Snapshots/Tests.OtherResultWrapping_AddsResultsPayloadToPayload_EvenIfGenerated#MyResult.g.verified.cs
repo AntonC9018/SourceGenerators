@@ -8,25 +8,32 @@ public partial record struct MyResult
 {
     public required MyResultTag Tag { get; init; }
     public global::System.Exception? Exception { get; init; }
-    public MyResultPayload Payload => new();
-    public static MyResult Ok(global::Tag1 tag)
+    public MyResultPayload Payload;
+    public static MyResult Ok(global::Tag1 tag, global::Payload2 payload)
     {
-        global::System.Diagnostics.Debug.Assert(tag is global::Tag1.B);
+        global::System.Diagnostics.Debug.Assert(tag is global::Tag1.A);
         return new()
         {
             Tag = new(tag),
+            Payload = new()
+            {
+                Payload2 = payload,
+            },
         };
     }
 
-    public static MyResult Failure(global::Tag1 tag, global::System.Exception? exception = null)
+    public static MyResult Failure(MyOtherResult otherResult)
     {
         return new()
         {
-            Tag = new(tag),
-            Exception = exception,
+            Tag = new(otherResult.Tag),
+            Payload = new()
+            {
+                MyOtherResult = otherResult.Payload,
+            },
+            Exception = otherResult.Exception,
         };
     }
-
 }
 public partial record struct MyResultTag
 {
@@ -35,7 +42,13 @@ public partial record struct MyResultTag
     private MyResultTag(global::ResultBase tag) => Value = tag;
     public MyResultTag(global::Tag1 tag)
     {
+        global::System.Diagnostics.Debug.Assert(tag is global::Tag1.A);
         Value = global::ResultBase.Create<global::Tag1>(tag);
+    }
+
+    public MyResultTag(MyOtherResultTag tag)
+    {
+        Value = tag.Value;
     }
 
     public static MyResultTag TryCreateWithCheck(global::ResultBase value)
@@ -52,18 +65,32 @@ public partial record struct MyResultTag
                 return ret;
             }
         }
+        {
+            var r = ret.As<MyOtherResultTag>();
+            if (!r.IsNone)
+            {
+                return ret;
+            }
+        }
         return new(global::ResultBase.None);
     }
     public static readonly global::System.Collections.Immutable.ImmutableArray<global::ResultSet> ResultSets = [
-        global::ResultBase.ResultSetOf<global::Tag1>(),
+        global::ResultBase.ResultSetOf<global::Tag1>([global::Tag1.A]),
+        .. MyOtherResultTag.ResultSets,
     ];
     public static void Declare()
     {
         global::ResultBase.Declare<global::Tag1>();
+        MyOtherResultTag.Declare();
     }
     public readonly global::Tag1 AsTag1()
     {
         return Value.As<global::Tag1>();
+    }
+
+    public readonly MyOtherResultTag AsMyOtherResultTag()
+    {
+        return MyOtherResultTag.TryCreateWithCheck(Value);
     }
 
     public readonly T As<T>() where T : struct
@@ -71,6 +98,10 @@ public partial record struct MyResultTag
         if (typeof(T) == typeof(global::Tag1))
         {
             return (T) (object) AsTag1();
+        }
+        if (typeof(T) == typeof(MyOtherResultTag))
+        {
+            return (T) (object) AsMyOtherResultTag();
         }
         throw new global::System.InvalidOperationException($"Type {typeof(T).FullName!} is not allowed here");
     }
@@ -83,7 +114,7 @@ public partial record struct MyResultTag
                 var r = As<global::Tag1>();
                 if (r != (global::Tag1) 0)
                 {
-                    if (r == global::Tag1.B)
+                    if (r == global::Tag1.A)
                     {
                         return true;
                     }
@@ -96,4 +127,6 @@ public partial record struct MyResultTag
 [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Auto)]
 public partial record struct MyResultPayload
 {
+    public global::Payload2 Payload2;
+    public MyOtherResultPayload MyOtherResult;
 }

@@ -8,9 +8,10 @@ using SourceGeneration.Models;
 
 namespace ResultTypes.SourceGenerator;
 
-internal readonly record struct TagInfo()
+internal sealed class TagInfo()
 {
     public HashSet<string> Values { get; } = [];
+    public HashSet<string>? OkValues { get; set; }
     public bool IsEnum { get; init; }
     public string? BaseSet { get; init; }
     public required string ShortName { get; init; }
@@ -26,10 +27,11 @@ internal readonly struct TagsKvpWrapper
 
     public string QualifiedName => _kvp.Key;
     public TagInfo Info => _kvp.Value;
-    public HashSet<string> Values => _kvp.Value.Values;
-    public bool IsEnum => _kvp.Value.IsEnum;
-    public string? BaseSet => _kvp.Value.BaseSet;
-    public string ShortName => _kvp.Value.ShortName;
+    public HashSet<string> Values => Info.Values;
+    public HashSet<string>? OkValues => Info.OkValues;
+    public bool IsEnum => Info.IsEnum;
+    public string? BaseSet => Info.BaseSet;
+    public string ShortName => Info.ShortName;
 }
 
 internal readonly struct WriteTagsContext : IEnumerable<TagsKvpWrapper>, IDisposable
@@ -66,6 +68,12 @@ internal readonly struct WriteTagsContext : IEnumerable<TagsKvpWrapper>, IDispos
                     tags.Add(key, v);
                 }
                 v.Values.Add(genericTag);
+
+                if (isOk)
+                {
+                    v.OkValues ??= new();
+                    v.OkValues.Add(genericTag);
+                }
             }
 
             var model = p.Model.OverloadsSets.Get(tag);
@@ -86,19 +94,28 @@ internal readonly struct WriteTagsContext : IEnumerable<TagsKvpWrapper>, IDispos
                         BaseSet = tagType.SupersetReference?.FullyQualifiedName,
                         IsEnum = tagType.IsEnum,
                     };
-                    tags.Add(tagType.Type.ShortName, v);
-                    continue;
+                    tags.Add(tagType.Type.QualifiedName, v);
                 }
 
-                if (m.AcceptedTagValues.IsEmpty)
+                void AddTo(HashSet<string> values)
                 {
-                    v.Values.Clear();
-                    continue;
+                    if (m.AcceptedTagValues.IsEmpty)
+                    {
+                        values.Clear();
+                        return;
+                    }
+
+                    foreach (var x in m.AcceptedTagValues)
+                    {
+                        values.Add(x);
+                    }
                 }
 
-                foreach (var x in m.AcceptedTagValues)
+                AddTo(v.Values);
+                if (isOk)
                 {
-                    v.Values.Add(x);
+                    v.OkValues ??= new();
+                    AddTo(v.OkValues);
                 }
             }
 
@@ -113,6 +130,11 @@ internal readonly struct WriteTagsContext : IEnumerable<TagsKvpWrapper>, IDispos
                         ShortName = r.ResultType.ShortName + "Tag",
                     };
                     tags.Add(tagName, v);
+                }
+
+                if (isOk)
+                {
+                    v.OkValues ??= [];
                 }
             }
         }
@@ -327,86 +349,36 @@ internal static class WriteTagsHelper
         // IsOk
         void WriteIsOk()
         {
-            List<(string Tag, List<string> Values, bool IsEnum)> oks = new();
-
-            void TryAdd(string tag, ReadOnlySpan<string> values, bool isEnum)
-            {
-                foreach (var x in oks)
-                {
-                    if (x.Tag != tag)
-                    {
-                        continue;
-                    }
-                    if (x.Values.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    bool Contains(string value)
-                    {
-                        foreach (string v in x.Values)
-                        {
-                            if (v == value)
-                            {
-                                return true;
-                            }
-                        }
-                        return false;
-                    }
-
-                    foreach (var v in values)
-                    {
-                        if (Contains(v))
-                        {
-                            continue;
-                        }
-
-                        x.Values.Add(v);
-                    }
-                    return;
-                }
-
-                oks.Add((tag, [.. values], isEnum));
-            }
-
-            foreach (var m in p.Model.OverloadsSets.Ok.Methods)
-            {
-                if (m.Tag is not { } tag)
-                {
-                    TryAdd(p.Config.WellKnownTypes, ["Ok"], isEnum: true);
-                    continue;
-                }
-
-                TryAdd(
-                    tag.Type.QualifiedName,
-                    m.AcceptedTagValues.AsSpan(),
-                    isEnum: tag.IsEnum);
-            }
 
             p.Writer.WriteLine($"public readonly bool IsOk");
             using var b = p.Writer.WriteBlock();
             p.Writer.WriteLine("get");
             using var b1 = p.Writer.WriteBlock();
 
-            foreach (var ok in oks)
+            foreach (var tag in writeTags)
             {
+                if (tag.OkValues is not { } okValues)
+                {
+                    continue;
+                }
+
                 using var b2 = p.Writer.WriteBlock();
                 {
-                    p.Writer.WriteLine($"var r = As<{ok.Tag}>();");
+                    p.Writer.WriteLine($"var r = As<{tag.QualifiedName}>();");
 
-                    if (ok.IsEnum)
+                    if (tag.IsEnum)
                     {
-                        p.Writer.WriteLine($"if (r != ({ok.Tag}) 0)");
+                        p.Writer.WriteLine($"if (r != ({tag.QualifiedName}) 0)");
                         using var b3 = p.Writer.WriteBlock();
 
-                        if (ok.Values.Count == 0)
+                        if (okValues.Count == 0)
                         {
                             p.Writer.WriteLine("return true;");
                         }
 
-                        foreach (var v in ok.Values)
+                        foreach (var v in okValues)
                         {
-                            p.Writer.WriteLine($"if (r == {ok.Tag}.{v})");
+                            p.Writer.WriteLine($"if (r == {tag.QualifiedName}.{v})");
                             using var b4 = p.Writer.WriteBlock();
                             p.Writer.WriteLine("return true;");
                         }

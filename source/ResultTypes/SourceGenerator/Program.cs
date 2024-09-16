@@ -84,8 +84,8 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
         var allOverloadsContext = new AllOverloadsContext
         {
             Model = p.Model,
-            PayloadNames = new(p.Model),
-            SinglePayloadIndex = default,
+            PayloadNames = new(p.Model, (model, tag) => model.OverloadsSets.Ref(tag).Methods.Length),
+            ResultPayloadNames = new(p.Model, (model, tag) => model.OverloadsSets.Ref(tag).PassAlongResults.Length),
             DefaultPrefixes = new()
             {
                 Ok = "Ok",
@@ -143,7 +143,15 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
 
             w.WriteLine($"public required {resultTypeInfo.Name}Tag Tag {{ get; init; }}");
             w.WriteLine($"public global::System.Exception? Exception {{ get; init; }}");
-            w.WriteLine($"public {payloadContext.PayloadTypeName} Payload;");
+
+            {
+                w.Write($"public {payloadContext.PayloadTypeName} Payload");
+                if (allOverloadsContext.IsPayloadNeverAssigned())
+                {
+                    w.Write(" => new()");
+                }
+                w.WriteLine(";");
+            }
 
             foreach (var overloadsInfo in allOverloadsContext)
             {
@@ -155,11 +163,46 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
             OverloadSetInfoAccessor info)
         {
             bool includeExceptionParam = info.IncludeExceptionParameter;
-            var overloads = info.Model;
+            var model = info.Model;
 
-            for (int i = 0; i < overloads.Methods.Length; i++)
+            for (int index = 0; index < model.PassAlongResults.Length; index++)
             {
-                var m = overloads.Methods[i];
+                var passAlongResult = model.PassAlongResults[index];
+                w.WriteLine(
+                    $"public static {resultTypeInfo.Name} {info.DefaultPrefix}({passAlongResult.ResultType.QualifiedName} otherResult)");
+                using var b = w.WriteBlock();
+
+                {
+                    var shouldNegateIsOk = info.Tag == OverloadTag.Failure;
+                    var negationText = shouldNegateIsOk ? "!" : "";
+
+                    if (info.Tag == OverloadTag.Ok)
+                    {
+                        w.WriteLine(
+                            $"{WriteHelper.AssertFunc}({negationText}otherResult.Tag.IsOk, \"Check IsOk before constructing the result\");");
+                    }
+                }
+
+                {
+                    w.WriteLine("return new()");
+                    using var b1 = w.WriteBlock(endChar: ";");
+
+                    w.WriteLine("Tag = new(otherResult.Tag),");
+                    {
+                        w.WriteLine("Payload = new()");
+                        using var b2 = w.WriteBlock(endChar: ",");
+
+                        var payloadFieldName = info.ResultPayloadNames[index];
+                        w.WriteLine($"{payloadFieldName} = otherResult.Payload,");
+                    }
+
+                    w.WriteLine("Exception = otherResult.Exception,");
+                }
+            }
+
+            for (int i = 0; i < model.Methods.Length; i++)
+            {
+                var m = model.Methods[i];
                 w.Write($"public static {resultTypeInfo.Name} {info.DefaultPrefix}(");
                 {
                     var list = w.List();
@@ -189,7 +232,7 @@ public sealed class ResultTypesGenerator : IIncrementalGenerator
                         if (!m.AcceptedTagValues.IsEmpty)
                         {
                             var tagType = tag.Type.QualifiedName;
-                            w.Write($"global::{typeof(Debug).FullName!}.Assert(tag is ");
+                            w.Write($"{WriteHelper.AssertFunc}(tag is ");
                             var list = w.List(separator: " or ");
                             foreach (var tagName in m.AcceptedTagValues)
                             {

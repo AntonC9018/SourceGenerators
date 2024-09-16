@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -38,8 +39,28 @@ internal readonly record struct TypeInfo(string Name, TypeKind Kind, bool IsReco
         };
     }
 
-    public void WriteAsTypeDeclaration(IndentedTextWriter writer)
+    public void WriteAsTypeDeclaration(
+        IndentedTextWriter writer,
+        bool allowDeclaringFields = false,
+        Accessibility accessibility = Accessibility.NotApplicable)
     {
+        if (allowDeclaringFields)
+        {
+            if (Kind == TypeKind.Struct)
+            {
+                // [StructLayout(LayoutKind.Auto)]
+                // Otherwise, the fields can't be defined across multiple declarations.
+                writer.WriteLine($"[global::{typeof(StructLayoutAttribute).Namespace}.StructLayout(global::{typeof(LayoutKind).Namespace}.{nameof(LayoutKind)}.{nameof(LayoutKind.Auto)})]");
+            }
+        }
+
+        if (accessibility != Accessibility.NotApplicable)
+        {
+            writer.Write($"{SyntaxFacts.GetText(accessibility)} ");
+        }
+
+        writer.Write("partial ");
+
         if (IsRecord)
         {
             writer.Write("record ");

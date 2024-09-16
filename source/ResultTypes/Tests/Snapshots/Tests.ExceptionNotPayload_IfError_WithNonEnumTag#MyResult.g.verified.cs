@@ -8,17 +8,12 @@ public partial record struct MyResult
 {
     public required MyResultTag Tag { get; init; }
     public global::System.Exception? Exception { get; init; }
-    public MyResultPayload Payload;
-    public static MyResult Failure(global::Payload payload, global::System.Exception? exception = null)
+    public MyResultPayload Payload => new();
+    public static MyResult Failure(global::MyResult1Tag tag, global::System.Exception? exception = null)
     {
-        var tag = global::WellKnownResult.GenericFailure;
         return new()
         {
             Tag = new(tag),
-            Payload = new()
-            {
-                Payload = payload,
-            },
             Exception = exception,
         };
     }
@@ -29,10 +24,9 @@ public partial record struct MyResultTag
     public global::ResultBase Value { get; }
     public readonly bool IsNone => Value.IsNone;
     private MyResultTag(global::ResultBase tag) => Value = tag;
-    public MyResultTag(global::WellKnownResult tag)
+    public MyResultTag(global::MyResult1Tag tag)
     {
-        global::System.Diagnostics.Debug.Assert(tag is global::WellKnownResult.GenericFailure);
-        Value = global::ResultBase.Create<global::WellKnownResult>(tag);
+        Value = tag.Value;
     }
 
     public static MyResultTag TryCreateWithCheck(global::ResultBase value)
@@ -43,8 +37,8 @@ public partial record struct MyResultTag
             return ret;
         }
         {
-            var r = ret.As<global::WellKnownResult>();
-            if (r != (global::WellKnownResult) 0)
+            var r = ret.As<global::MyResult1Tag>();
+            if (!r.IsNone)
             {
                 return ret;
             }
@@ -52,22 +46,22 @@ public partial record struct MyResultTag
         return new(global::ResultBase.None);
     }
     public static readonly global::System.Collections.Immutable.ImmutableArray<global::ResultSet> ResultSets = [
-        global::ResultBase.ResultSetOf<global::WellKnownResult>([global::WellKnownResult.GenericFailure]),
+        .. global::MyResult1Tag.ResultSets,
     ];
     public static void Declare()
     {
-        global::ResultBase.Declare<global::WellKnownResult>();
+        global::MyResult1Tag.Declare();
     }
-    public readonly global::WellKnownResult AsWellKnown()
+    public readonly global::MyResult1Tag AsMyResult1Tag()
     {
-        return Value.As<global::WellKnownResult>();
+        return global::MyResult1Tag.TryCreateWithCheck(Value);
     }
 
     public readonly T As<T>() where T : struct
     {
-        if (typeof(T) == typeof(global::WellKnownResult))
+        if (typeof(T) == typeof(global::MyResult1Tag))
         {
-            return (T) (object) AsWellKnown();
+            return (T) (object) AsMyResult1Tag();
         }
         throw new global::System.InvalidOperationException($"Type {typeof(T).FullName!} is not allowed here");
     }
@@ -83,5 +77,4 @@ public partial record struct MyResultTag
 [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Auto)]
 public partial record struct MyResultPayload
 {
-    public global::Payload Payload;
 }

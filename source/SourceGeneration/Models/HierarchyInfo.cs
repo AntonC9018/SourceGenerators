@@ -181,7 +181,8 @@ internal static class GeneratedFileHelper
         this IndentedTextWriter w,
         HierarchyInfo hierarchy,
         Accessibility lastAccessibility = Accessibility.NotApplicable,
-        TypeInfo lastReplacement = default)
+        TypeInfo lastReplacement = default,
+        bool allowDeclaringFields = false)
     {
         if (hierarchy.Namespace.Length > 0)
         {
@@ -189,10 +190,12 @@ internal static class GeneratedFileHelper
             _ = w.WriteBlock();
         }
 
-        void Write(in TypeInfo typeInfo)
+        void Write(in TypeInfo typeInfo, Accessibility accessibility)
         {
-            w.Write("partial ");
-            typeInfo.WriteAsTypeDeclaration(w);
+            typeInfo.WriteAsTypeDeclaration(
+                w,
+                allowDeclaringFields: allowDeclaringFields,
+                accessibility: accessibility);
             w.WriteLine();
             w.WriteBlock();
         }
@@ -200,21 +203,16 @@ internal static class GeneratedFileHelper
         for (int index = 0; index < hierarchy.Hierarchy.Length - 1; index++)
         {
             var type = hierarchy.Hierarchy[index];
-            Write(type);
+            Write(type, Accessibility.NotApplicable);
         }
 
-        if (lastAccessibility != Accessibility.NotApplicable)
+        if (lastReplacement != default)
         {
-            w.Write($"{SyntaxFacts.GetText(lastAccessibility)} ");
-        }
-
-        if (lastReplacement == default)
-        {
-            Write(lastReplacement);
+            Write(lastReplacement, lastAccessibility);
         }
         else
         {
-            Write(hierarchy.Hierarchy[^1]);
+            Write(hierarchy.Hierarchy[^1], lastAccessibility);
         }
 
         var blockCount = hierarchy.Hierarchy.Length;

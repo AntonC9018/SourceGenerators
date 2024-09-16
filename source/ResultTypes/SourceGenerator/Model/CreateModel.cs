@@ -86,13 +86,17 @@ internal static class CreateModelHelper
                     imports.Add(usingStatement.NamespaceOrType.ToString());
                 }
 
-                // Lookup type by name of returnType.Name + "Payload" in the context of the method
                 var sharedPayloadName = returnType.Name + "Payload";
                 var sharedPayloads = context.SemanticModel.LookupNamespacesAndTypes(
                     context.TargetSyntax.SpanStart,
-                    (INamespaceOrTypeSymbol) context.TargetSymbol.ContainingType ?? context.TargetSymbol.ContainingNamespace,
+                    // (INamespaceOrTypeSymbol) context.TargetSymbol.ContainingType ?? context.TargetSymbol.ContainingNamespace,
+                    // Specifying a container manually makes it only search in that one,
+                    // not the parent containers as well.
+                    container: null,
                     sharedPayloadName);
-                var sharedPayload = sharedPayloads.Length == 0 ? sharedPayloads[0] as INamedTypeSymbol : null;
+                var sharedPayload = sharedPayloads.Length != 0
+                    ? sharedPayloads[0] as INamedTypeSymbol
+                    : null;
 
                 var existingPayloadFieldNames = sharedPayload?
                     .GetAllMembers()
@@ -305,7 +309,7 @@ internal static class CreateModelHelper
 
                     if (result.ArgInfo.Kind == ArgKinds.Result)
                     {
-                        TryAddResultTypeOverload(result.ArgInfo.Type, ref state.ResultSets);
+                        TryAddResultTypeOverload(result.ArgInfo.Type!, ref state.ResultSets);
                     }
                     else
                     {
@@ -324,7 +328,7 @@ internal static class CreateModelHelper
                 }
                 case [{ } x, { } x1]:
                 {
-                    var kinds = ArgKinds.Const | ArgKinds.AllTags;
+                    var kinds = ArgKinds.Const | ArgKinds.AllTags | ArgKinds.AllPayloads;
 
                     var result1 = MatchArg(x, kinds);
                     if (result1.Failure != FindArgKindFailure.None)
@@ -332,7 +336,11 @@ internal static class CreateModelHelper
                         break;
                     }
 
-                    var nextKinds = ArgKinds.AllPayloads;
+                    ArgKinds nextKinds = default;
+                    if (result1.ArgInfo.Kind.HasEitherOf(ArgKinds.Const | ArgKinds.AllTags))
+                    {
+                        nextKinds |= ArgKinds.AllPayloads;
+                    }
                     if (!exceptionIsPayload)
                     {
                         nextKinds |= ArgKinds.Exception;
@@ -615,21 +623,33 @@ internal static class CreateModelHelper
             Debug.Assert(x != default);
 
             var shortName = x.Type?.Name ?? (x.AssociatedResultType!.Name + defaultPostfix);
-            var resultTypeQualifyingPrefix = x.AssociatedResultType?.ContainingSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var containingTypeOrNamespace = (INamespaceOrTypeSymbol?) x.AssociatedResultType?.ContainingType ?? x.AssociatedResultType?.ContainingNamespace;
 
-            TypeSyntaxReference Type()
+            string Type()
             {
                 if (x.Type is { } type)
                 {
                     return TypeSyntaxReference.From(type);
                 }
 
-                if (resultTypeQualifyingPrefix == "")
+                if (containingTypeOrNamespace is null)
                 {
-                    return new(shortName);
+                    return shortName;
                 }
 
-                return new(resultTypeQualifyingPrefix + "." + shortName);
+                if (containingTypeOrNamespace is INamespaceSymbol
+                    {
+                        IsGlobalNamespace: true,
+                    })
+                {
+                    return $"global::{shortName}";
+                }
+
+                using var builder = ImmutableArrayBuilder<char>.Rent();
+                containingTypeOrNamespace.AppendFullyQualifiedMetadataName(builder);
+                builder.Add('.');
+                builder.AddRange(shortName.AsSpan());
+                return builder.ToString();
             }
 
             return new()

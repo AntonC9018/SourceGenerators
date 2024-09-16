@@ -114,7 +114,7 @@ public class Tests
     public Task UsesExistingResultType()
     {
         return _helper.Verify(Config + """
-            public readonly partial record struct Result1;
+            public partial record struct Result1;
 
             public static partial class Helper1
             {
@@ -208,9 +208,9 @@ public class Tests
             }
             """,
             """
-            var tag = Helper1.Thing().Tag;
+            var thing = Helper1.Thing();
             var exception = new Exception1();
-            return MyResult.Failure(tag, exception);
+            return MyResult.Failure(thing.Tag, exception);
             """);
         return _helper.Verify(source);
     }
@@ -320,9 +320,6 @@ public class Tests
             public struct PayloadA
             {
             }
-            public struct PayloadB
-            {
-            }
             """,
             """
             if (i == 0)
@@ -331,7 +328,7 @@ public class Tests
             }
             else
             {
-                return MyResult.Failure(Tag2.C, new PayloadB());
+                return MyResult.Failure(Tag2.C, new PayloadA());
             }
             """);
         return _helper.Verify(source);
@@ -444,7 +441,7 @@ public class Tests
             }
             else
             {
-                return MyResult.Failure(new Payload());
+                return MyResult.Failure(new Payload1());
             }
             """);
         return _helper.Verify(source);
@@ -534,7 +531,7 @@ public class Tests
             }
             """,
             """
-            var otherResult = Helper1.GetOtherResult();
+            var otherResult = Helper1.GetOtherResult(i);
             if (!otherResult.Tag.IsOk)
             {
                 return MyResult.Failure(otherResult.Tag, new Payload1());
@@ -550,12 +547,6 @@ public class Tests
     {
         var source = PayloadTestCode(
             """
-            public enum Tag1
-            {
-                None,
-                A,
-                B,
-            }
             public partial struct MyResultPayload
             {
                 public Payload1 Payload1;
@@ -565,7 +556,7 @@ public class Tests
             }
             """,
             """
-            return MyResult.Failure(otherResult.Tag, new Payload1());
+            return MyResult.Failure(new Payload1());
             """);
         return _helper.Verify(source);
     }
@@ -600,7 +591,7 @@ public class Tests
             """,
             """
             var result = Helper1.GetResult();
-            return MyResult.Ok(otherResult);
+            return MyResult.Ok(result);
             """);
         return _helper.Verify(source);
     }

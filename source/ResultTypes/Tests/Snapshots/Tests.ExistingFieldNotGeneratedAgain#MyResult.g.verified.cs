@@ -9,7 +9,7 @@ public partial record struct MyResult
     public required MyResultTag Tag { get; init; }
     public global::System.Exception? Exception { get; init; }
     public MyResultPayload Payload;
-    public static MyResult Failure(global::Payload payload, global::System.Exception? exception = null)
+    public static MyResult Failure(global::Payload1 payload, global::System.Exception? exception = null)
     {
         var tag = global::WellKnownResult.GenericFailure;
         return new()
@@ -17,7 +17,7 @@ public partial record struct MyResult
             Tag = new(tag),
             Payload = new()
             {
-                Payload = payload,
+                Payload1 = payload,
             },
             Exception = exception,
         };
@@ -81,7 +81,6 @@ public partial record struct MyResultTag
     }
 }
 [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Auto)]
-public partial record struct MyResultPayload
+partial struct MyResultPayload
 {
-    public global::Payload Payload;
 }

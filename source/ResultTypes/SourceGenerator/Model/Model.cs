@@ -10,7 +10,7 @@ internal sealed record Model
     public required HierarchyInfo ResultHierarchy { get; init; }
     public required Accessibility ResultAccessibility { get; init; }
     public required ResultPayload? SharedPayload { get; init; }
-    public required OneForEachOverloadSet<OverloadSet> OverloadsSets { get; init; }
+    public required OneForEachOverloadSet<OverloadSet> OverloadsSets;
 
     // We need the imports, because we can't know where
     // the referenced generated result types come from.

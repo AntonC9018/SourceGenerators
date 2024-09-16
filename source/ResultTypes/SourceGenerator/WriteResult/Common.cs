@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Diagnostics;
 using SourceGeneration.Helpers;
 using SourceGeneration.Models;
 
@@ -21,4 +22,9 @@ internal readonly record struct CommonContext
     public required AllOverloadsContext AllOverloadsContext { get; init; }
 
     public TypeInfo ResultTypeInfo => Model.ResultHierarchy.Hierarchy[^1];
+}
+
+public static class WriteHelper
+{
+    public static readonly string AssertFunc = $"global::{typeof(Debug).FullName!}.Assert";
 }

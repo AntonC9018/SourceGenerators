@@ -1,7 +1,0 @@
-﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=aad91754_002D810a_002D4f04_002D8212_002D4db9c7c16e83/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ExceptionNotPayload_IfError_WithTag" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
-  &lt;TestAncestor&gt;&#xD;
-    &lt;TestId&gt;xUnit::E41465A7-D0A5-4572-8684-88D09B52FDAE::net8.0::ResultTypes.Tests.Tests.ExceptionNotPayload_IfError_WithTag&lt;/TestId&gt;&#xD;
-    &lt;TestId&gt;xUnit::E41465A7-D0A5-4572-8684-88D09B52FDAE::net8.0::ResultTypes.Tests.Tests.ExceptionNotPayload_IfError_WithNonEnumTag&lt;/TestId&gt;&#xD;
-  &lt;/TestAncestor&gt;&#xD;
-&lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

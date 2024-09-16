@@ -9,16 +9,23 @@ public partial record struct MyResult
     public required MyResultTag Tag { get; init; }
     public global::System.Exception? Exception { get; init; }
     public MyResultPayload Payload;
-    public static MyResult Failure(global::Payload payload, global::System.Exception? exception = null)
+    public static MyResult Ok(global::MyResultPayload payload)
+    {
+        var tag = global::WellKnownResult.Ok;
+        return new()
+        {
+            Tag = new(tag),
+            Payload = payload,
+        };
+    }
+
+    public static MyResult Failure(global::MyResultPayload payload, global::System.Exception? exception = null)
     {
         var tag = global::WellKnownResult.GenericFailure;
         return new()
         {
             Tag = new(tag),
-            Payload = new()
-            {
-                Payload = payload,
-            },
+            Payload = payload,
             Exception = exception,
         };
     }
@@ -31,7 +38,7 @@ public partial record struct MyResultTag
     private MyResultTag(global::ResultBase tag) => Value = tag;
     public MyResultTag(global::WellKnownResult tag)
     {
-        global::System.Diagnostics.Debug.Assert(tag is global::WellKnownResult.GenericFailure);
+        global::System.Diagnostics.Debug.Assert(tag is global::WellKnownResult.Ok or global::WellKnownResult.GenericFailure);
         Value = global::ResultBase.Create<global::WellKnownResult>(tag);
     }
 
@@ -52,7 +59,7 @@ public partial record struct MyResultTag
         return new(global::ResultBase.None);
     }
     public static readonly global::System.Collections.Immutable.ImmutableArray<global::ResultSet> ResultSets = [
-        global::ResultBase.ResultSetOf<global::WellKnownResult>([global::WellKnownResult.GenericFailure]),
+        global::ResultBase.ResultSetOf<global::WellKnownResult>([global::WellKnownResult.Ok, global::WellKnownResult.GenericFailure]),
     ];
     public static void Declare()
     {
@@ -76,12 +83,21 @@ public partial record struct MyResultTag
     {
         get
         {
+            {
+                var r = As<global::WellKnownResult>();
+                if (r != (global::WellKnownResult) 0)
+                {
+                    if (r == global::WellKnownResult.Ok)
+                    {
+                        return true;
+                    }
+                }
+            }
             return false;
         }
     }
 }
 [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Auto)]
-public partial record struct MyResultPayload
+partial struct MyResultPayload
 {
-    public global::Payload Payload;
 }
