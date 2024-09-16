@@ -424,8 +424,3 @@ internal static class WriteTagsHelper
         }
     }
 }
-
-public static class WriteResultHelper
-{
-
-}

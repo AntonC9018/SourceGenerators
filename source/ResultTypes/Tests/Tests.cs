@@ -389,4 +389,219 @@ public class Tests
             """);
         return _helper.Verify(source);
     }
+
+    [Fact]
+    public Task WholePayload()
+    {
+        // It detects that it's the whole payload by the type name.
+        // Could add an attribute maybe later, like [PayloadFor(typeof(MyResult)]
+        var source = PayloadTestCode(
+            """
+            public partial struct MyResultPayload
+            {
+                public int Value;
+            }
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Ok(new MyResultPayload
+                {
+                    Value = 5,
+                });
+            }
+            else
+            {
+                return MyResult.Failure(new MyResultPayload
+                {
+                    Value = 5,
+                });
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task WholePayload_WithGeneratedField()
+    {
+        var source = PayloadTestCode(
+            """
+            public partial struct MyResultPayload
+            {
+                public int Value;
+            }
+            public struct Payload1
+            {
+            }
+            """,
+            """
+            if (i == 0)
+            {
+                return MyResult.Ok(new MyResultPayload
+                {
+                    Value = 5,
+                });
+            }
+            else
+            {
+                return MyResult.Failure(new Payload());
+            }
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task OtherResultWrapping_AddsResultsPayloadToPayload_EvenIfGenerated()
+    {
+        var source = PayloadTestCode(
+            """
+            public struct Payload1
+            {
+            }
+            public struct Payload2
+            {
+            }
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public enum Tag2
+            {
+                None,
+                C,
+                D,
+            }
+
+            public static class Helper1
+            {
+                [GenerateResultType]
+                public static MyOtherResult GetOtherResult(int i)
+                {
+                    if (i == 0)
+                    {
+                        return MyOtherResult.Ok(Tag1.A);
+                    }
+                    else
+                    {
+                        return MyOtherResult.Failure(Tag2.C, new Payload1());
+                    }
+                }
+            }
+            """,
+            """
+            var otherResult = Helper1.GetOtherResult(i);
+            if (!otherResult.Tag.IsOk)
+            {
+                return MyResult.Failure(otherResult);
+            }
+
+            return MyResult.Ok(Tag1.A, new Payload2());
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task TagFromAnotherGeneratedResultWorks()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public struct Payload1
+            {
+            }
+
+            public static class Helper1
+            {
+                [GenerateResultType]
+                public static MyOtherResult GetOtherResult(int i)
+                {
+                    if (i == 0)
+                    {
+                        return MyOtherResult.Failure(Tag1.A);
+                    }
+                    else
+                    {
+                        return MyOtherResult.Ok();
+                    }
+                }
+            }
+            """,
+            """
+            var otherResult = Helper1.GetOtherResult();
+            if (!otherResult.Tag.IsOk)
+            {
+                return MyResult.Failure(otherResult.Tag, new Payload1());
+            }
+
+            return MyResult.Ok();
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExistingFieldNotGeneratedAgain()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public partial struct MyResultPayload
+            {
+                public Payload1 Payload1;
+            }
+            public struct Payload1
+            {
+            }
+            """,
+            """
+            return MyResult.Failure(otherResult.Tag, new Payload1());
+            """);
+        return _helper.Verify(source);
+    }
+
+    [Fact]
+    public Task ExistingFieldForGeneratedPayloadDetectedByType()
+    {
+        var source = PayloadTestCode(
+            """
+            public enum Tag1
+            {
+                None,
+                A,
+                B,
+            }
+            public partial struct MyResultPayload
+            {
+                public MyOtherResultPayload OtherResult;
+            }
+            public struct Payload1
+            {
+            }
+
+            public static class Helper1
+            {
+                [GenerateResultType]
+                public static MyOtherResult GetResult()
+                {
+                    return MyOtherResult.Ok(new Payload1());
+                }
+            }
+            """,
+            """
+            var result = Helper1.GetResult();
+            return MyResult.Ok(otherResult);
+            """);
+        return _helper.Verify(source);
+    }
 }
