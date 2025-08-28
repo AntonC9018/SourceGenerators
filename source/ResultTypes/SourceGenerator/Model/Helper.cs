@@ -218,22 +218,21 @@ internal static class Helper
         {
             bool IsException(INamedTypeSymbol exceptionType, ITypeSymbol typeSymbol)
             {
+                var t = typeSymbol;
                 while (true)
                 {
+                    if (t.Equals(exceptionType, SymbolEqualityComparer.Default))
+                    {
+                        return true;
+                    }
+
                     if (typeSymbol.BaseType is not { } baseType)
                     {
-                        break;
+                        return false;
                     }
 
-                    if (!baseType.Equals(exceptionType, SymbolEqualityComparer.Default))
-                    {
-                        typeSymbol = baseType;
-                        continue;
-                    }
-
-                    return true;
+                    t = baseType;
                 }
-                return false;
             }
             if (IsException(p.ExceptionSymbol, type))
             {

@@ -595,4 +595,21 @@ public class Tests
             """);
         return _helper.Verify(source);
     }
+
+    [Fact]
+    public Task ExceptionNotPayload()
+    {
+        var source = PayloadTestCode(
+            """
+            public sealed class Exception1 : Exception
+            {
+            }
+            """,
+            // Store as the base class.
+            """
+            Exception exception = new Exception1();
+            return MyResult.Failure(exception);
+            """);
+        return _helper.Verify(source);
+    }
 }
