@@ -1,5 +1,10 @@
 <Project>
     <PropertyGroup>
+        <AssemblyPrefix>Anton.</AssemblyPrefix>
+        <AssemblyName Condition="'$(AssemblyName)' == ''">$(AssemblyPrefix)$(MSBuildProjectName)</AssemblyName>
+    </PropertyGroup>
+
+    <PropertyGroup>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <DebugType>embedded</DebugType>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>

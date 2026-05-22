@@ -17,7 +17,7 @@ internal static class ITypeSymbolExtensions
     /// <param name="symbol">The input <see cref="ITypeSymbol"/> instance to check.</param>
     /// <param name="name">The full name to check.</param>
     /// <returns>Whether <paramref name="symbol"/> has a full name equals to <paramref name="name"/>.</returns>
-    public static bool HasFullyQualifiedMetadataName(this ITypeSymbol symbol, string name)
+    public static bool HasFullyQualifiedMetadataName(this INamespaceOrTypeSymbol symbol, string name)
     {
         using ImmutableArrayBuilder<char> builder = ImmutableArrayBuilder<char>.Rent();
 
@@ -45,7 +45,7 @@ internal static class ITypeSymbolExtensions
     /// </summary>
     /// <param name="symbol">The input <see cref="ITypeSymbol"/> instance.</param>
     /// <param name="builder">The target <see cref="ImmutableArrayBuilder{T}"/> instance.</param>
-    public static void AppendFullyQualifiedMetadataName(this ITypeSymbol symbol, in ImmutableArrayBuilder<char> builder)
+    public static void AppendFullyQualifiedMetadataName(this INamespaceOrTypeSymbol symbol, in ImmutableArrayBuilder<char> builder)
     {
         static void BuildFrom(ISymbol? symbol, in ImmutableArrayBuilder<char> builder)
         {
