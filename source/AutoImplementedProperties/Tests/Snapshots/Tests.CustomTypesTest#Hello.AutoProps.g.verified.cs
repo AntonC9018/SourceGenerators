@@ -5,6 +5,5 @@
 partial class Hello
 {
     public global::E E { get; set; }
-
     public global::S S { get; set; }
 }

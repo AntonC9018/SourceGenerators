@@ -36,7 +36,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
             var compilationUnit = GeneratePartialWithConstructor(item!);
 
             context.AddSource(
-                item!.Hierarchy.FullyQualifiedMetadataName + ".AutoProps.g.cs",
+                item!.DeclarationPath.HintName + ".AutoProps.g.cs",
                 compilationUnit.GetText(Encoding.UTF8));
         });
     }
@@ -62,7 +62,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         public required EquatableArray<MemberOrParameter> MemberNamesToSet { get; init; }
         // Null if doesn't have a base type.
         public required ConstructorsInfo? BaseConstructors { get; init; }
-        public required HierarchyInfo Hierarchy { get; init; }
+        public required TypeDeclarationPath DeclarationPath { get; init; }
     }
 
     private static Info? GetInfo(GeneratorAttributeSyntaxContext context)
@@ -73,14 +73,14 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
             return null;
         }
 
-        var hierarchyInfo = HierarchyInfo.From(typeSymbol);
+        var declarationPath = TypeDeclarationPath.FromExisting(typeSymbol);
         var constructors = GetBaseConstructors(context.SemanticModel.Compilation, typeSymbol);
         var members = GetMembersToSet(typeSymbol).ToImmutableArray();
 
         return new Info
         {
             BaseConstructors = constructors,
-            Hierarchy = hierarchyInfo,
+            DeclarationPath = declarationPath,
             MemberNamesToSet = members,
             Name = typeSymbol.Name,
         };
@@ -220,7 +220,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
             bool isLogger = type.FullyQualifiedName.StartsWith(loggerPrefix);
             if (isLogger)
             {
-                return ParseTypeName($"{loggerPrefix}<{info.Hierarchy.Hierarchy[0].QualifiedName}>");
+                return ParseTypeName($"{loggerPrefix}<{info.DeclarationPath.TargetType.Name}>");
             }
 
             return type.AsSyntax();
@@ -278,7 +278,7 @@ public sealed class AutoConstructorGenerator : IIncrementalGenerator
         }
 
         constructorSyntax = constructorSyntax.WithBody(Block(memberAssignments.Enumerable));
-        return info.Hierarchy.GetSyntax(
+        return info.DeclarationPath.ToCompilationUnit(
             new MemberDeclarationSyntax[] { constructorSyntax },
             nullableEnable: true);
     }

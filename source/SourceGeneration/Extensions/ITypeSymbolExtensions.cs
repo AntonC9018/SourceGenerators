@@ -27,11 +27,10 @@ internal static class ITypeSymbolExtensions
     }
 
     /// <summary>
-    /// Gets the fully qualified metadata name for a given <see cref="ITypeSymbol"/> instance.
+    /// Gets the fully qualified metadata name for a given namespace or type symbol.
     /// </summary>
-    /// <param name="symbol">The input <see cref="ITypeSymbol"/> instance.</param>
     /// <returns>The fully qualified metadata name for <paramref name="symbol"/>.</returns>
-    public static string GetFullyQualifiedMetadataName(this ITypeSymbol symbol)
+    public static string GetFullyQualifiedMetadataName(this INamespaceOrTypeSymbol symbol)
     {
         using ImmutableArrayBuilder<char> builder = ImmutableArrayBuilder<char>.Rent();
 
@@ -43,8 +42,6 @@ internal static class ITypeSymbolExtensions
     /// <summary>
     /// Appends the fully qualified metadata name for a given symbol to a target builder.
     /// </summary>
-    /// <param name="symbol">The input <see cref="ITypeSymbol"/> instance.</param>
-    /// <param name="builder">The target <see cref="ImmutableArrayBuilder{T}"/> instance.</param>
     public static void AppendFullyQualifiedMetadataName(this INamespaceOrTypeSymbol symbol, in ImmutableArrayBuilder<char> builder)
     {
         static void BuildFrom(ISymbol? symbol, in ImmutableArrayBuilder<char> builder)
