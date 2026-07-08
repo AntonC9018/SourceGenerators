@@ -27,7 +27,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyCacheHelper.SourceG
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyCacheHelper.Tests", "source\PropertyCacheHelper\Tests\PropertyCacheHelper.Tests.csproj", "{695CC1FB-DC5A-44FC-80E9-1ADC2EAF5F19}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared.Tests", "source\Shared.Tests\Shared.Tests.csproj", "{0BAC344E-DA21-40DB-B8AE-67F7DDE4C97B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SourceGeneration.Testing", "source\SourceGeneration.Testing\SourceGeneration.Testing.csproj", "{0BAC344E-DA21-40DB-B8AE-67F7DDE4C97B}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SourceGeneration", "source\SourceGeneration.Package\SourceGeneration.csproj", "{E4CFD908-DCD0-4D05-A639-FA432B974CE2}"
 EndProject

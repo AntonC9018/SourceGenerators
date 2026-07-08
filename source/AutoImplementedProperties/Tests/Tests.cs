@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using AutoImplementedProperties.Attributes;
 using AutoImplementedProperties.SourceGenerator;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace AutoImplementedProperties.Tests;

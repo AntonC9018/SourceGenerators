@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using AutoImplementedProperties.Tests;
 using PropertyCacheHelper.Shared;
 using PropertyCacheHelper.SourceGenerator;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace PropertyCacheHelper.Tests;

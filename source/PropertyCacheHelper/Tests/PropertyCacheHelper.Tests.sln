@@ -3,7 +3,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyCacheHelper.Tests",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyCacheHelper.SourceGenerator", "..\SourceGenerator\PropertyCacheHelper.SourceGenerator.csproj", "{D52C1887-2FC4-4B93-8A43-BAFEAE099133}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shared.Tests", "..\..\Shared.Tests\Shared.Tests.csproj", "{5E2BFCC1-F269-4107-B719-FD3F2F79B35A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SourceGeneration.Testing", "..\..\SourceGeneration.Testing\SourceGeneration.Testing.csproj", "{5E2BFCC1-F269-4107-B719-FD3F2F79B35A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

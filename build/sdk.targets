@@ -102,7 +102,7 @@
         </PackageReference>
     </ItemGroup>
 
-    <ItemGroup Condition="'$(IsTests)' == 'true' and '$(MSBuildProjectName)' != 'Shared.Tests'">
-        <ProjectReference Include="$(MSBuildThisFileDirectory)..\source\Shared.Tests\Shared.Tests.csproj" />
+    <ItemGroup Condition="'$(IsTests)' == 'true'">
+        <ProjectReference Include="$(MSBuildThisFileDirectory)..\source\SourceGeneration.Testing\SourceGeneration.Testing.csproj" />
     </ItemGroup>
 </Project>

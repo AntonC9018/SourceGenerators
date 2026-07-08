@@ -10,7 +10,7 @@ using VerifyTests;
 using VerifyXunit;
 using Basic.Reference.Assemblies;
 
-namespace AutoImplementedProperties.Tests;
+namespace SourceGeneration.Testing;
 
 public static class ModuleInitializer
 {

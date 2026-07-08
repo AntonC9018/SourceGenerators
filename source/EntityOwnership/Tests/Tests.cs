@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
-using AutoImplementedProperties.Tests;
 using EntityOwnership.SourceGenerator;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace EntityOwnership.Tests;
