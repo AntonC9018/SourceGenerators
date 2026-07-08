@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Remove="Consumers/**/*.cs" />
+    <None Include="Consumers/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
