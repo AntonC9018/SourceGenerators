@@ -12,7 +12,7 @@ namespace SourceGeneration.Models;
 /// <summary>
 /// A model describing where a generated partial type declaration is emitted.
 /// </summary>
-internal sealed partial record TypeDeclarationPath(
+public sealed partial record TypeDeclarationPath(
     string HintName,
     string Namespace,
     EquatableArray<TypeDeclarationInfo> ContainingTypes,
@@ -172,14 +172,14 @@ internal sealed partial record TypeDeclarationPath(
     }
 }
 
-internal readonly record struct GeneratedFileOptions(bool NullableEnable)
+public readonly record struct GeneratedFileOptions(bool NullableEnable)
 {
     public static GeneratedFileOptions NullableEnabled { get; } = new(true);
 
     public static GeneratedFileOptions NullableDisabled { get; } = new(false);
 }
 
-internal static class GeneratedFileHelper
+public static class GeneratedFileHelper
 {
     // Prepare the leading trivia for the generated compilation unit.
     // This will produce code as follows:
@@ -231,7 +231,7 @@ internal static class GeneratedFileHelper
     }
 }
 
-internal readonly struct DeclarationPathScope(
+public readonly struct DeclarationPathScope(
     IndentedTextWriter writer,
     int blockCount) : IDisposable
 {

@@ -16,7 +16,7 @@ namespace SourceGeneration.Helpers;
 /// <summary>
 /// A helper type to build sequences of values with pooled buffers.
 /// </summary>
-internal sealed class IndentedTextWriter : IDisposable
+public sealed class IndentedTextWriter : IDisposable
 {
     /// <summary>
     /// The default indentation (4 spaces).

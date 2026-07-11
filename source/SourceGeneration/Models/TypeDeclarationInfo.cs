@@ -10,7 +10,7 @@ namespace SourceGeneration.Models;
 /// <summary>
 /// A model describing one type declaration in a generated partial declaration path.
 /// </summary>
-internal sealed record class TypeDeclarationInfo(
+public sealed record class TypeDeclarationInfo(
     string Name,
     TypeKind Kind,
     bool IsRecord,

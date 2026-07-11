@@ -10,7 +10,7 @@ namespace SourceGeneration.Models;
 /// </summary>
 /// <param name="Descriptor">The wrapped <see cref="DiagnosticDescriptor"/> instance.</param>
 /// <param name="Arguments">The diagnostic arguments.</param>
-internal sealed record DeferredDiagnosticInfo(DiagnosticDescriptor Descriptor, EquatableArray<string> Arguments)
+public sealed record DeferredDiagnosticInfo(DiagnosticDescriptor Descriptor, EquatableArray<string> Arguments)
 {
     /// <summary>
     /// Creates a new <see cref="DeferredDiagnosticInfo"/> instance with the specified parameters.

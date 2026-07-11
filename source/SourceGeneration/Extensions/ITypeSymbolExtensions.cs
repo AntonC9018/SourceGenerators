@@ -9,7 +9,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="ITypeSymbol"/> types.
 /// </summary>
-internal static class ITypeSymbolExtensions
+public static class ITypeSymbolExtensions
 {
     /// <summary>
     /// Checks whether or not a given type symbol has a specified fully qualified metadata name.

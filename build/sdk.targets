@@ -28,56 +28,83 @@
         <OwnSharedProject>$(MSBuildProjectDirectory)\..\Shared\$(ProjectBaseName).Shared.csproj</OwnSharedProject>
     </PropertyGroup>
 
+    <ItemDefinitionGroup>
+        <SourceGenerationProjectReference>
+            <IncludeInConsumerPackage>false</IncludeInConsumerPackage>
+        </SourceGenerationProjectReference>
+    </ItemDefinitionGroup>
+
+    <!--
+      Generation-time dependencies are private compilation references. Their resolved copy-local
+      project outputs are propagated to analyzer consumers and generator packages below.
+    -->
     <ItemGroup Condition="'$(IsSourceGenerator)' == 'true'">
-        <None
-            Include="$(OutputPath)\$(AssemblyName).dll"
-            Pack="true"
-            PackagePath="analyzers/dotnet/cs"
-            Visible="false" />
-
         <ProjectReference
-            Include="$(UtilsSharedProject)"
-            PrivateAssets="all" />
-        <None
-            Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
-            Pack="true"
-            PackagePath="analyzers/dotnet/cs"
-            Visible="false" />
-        <None
-            Include="$(OutputPath)\$(AssemblyPrefix)Utils.Shared.dll"
-            Pack="true"
-            PackagePath="lib/netstandard2.0"
-            Visible="true" />
-
-        <!-- Same hack for the shared project of this sg, if it exists -->
-        <ProjectReference
-            Condition="Exists('$(OwnSharedProject)')"
-            Include="$(OwnSharedProject)"
-            PrivateAssets="all" />
-        <None
-            Condition="Exists('$(OwnSharedProject)')"
-            Include="$(OutputPath)\$(AssemblyPrefix)$(ProjectBaseName).Shared.dll"
-            Pack="true"
-            PackagePath="analyzers/dotnet/cs"
-            Visible="false" />
-        <None
-            Condition="Exists('$(OwnSharedProject)')"
-            Include="$(OutputPath)\$(AssemblyPrefix)$(ProjectBaseName).Shared.dll"
-            Pack="true"
-            PackagePath="lib/netstandard2.0"
-            Visible="true" />
+            Include="@(SourceGenerationProjectReference)"
+            KeepMetadata="IncludeInConsumerPackage">
+            <PrivateAssets>all</PrivateAssets>
+            <SourceGenerationProjectReference>true</SourceGenerationProjectReference>
+        </ProjectReference>
     </ItemGroup>
+
+    <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true'">
+        <BuildProjectReferences Condition="'$(NoBuild)' == 'true'">false</BuildProjectReferences>
+        <GetTargetPathDependsOn>
+            $(GetTargetPathDependsOn);
+            ResolveSourceGenerationProjectReferences
+        </GetTargetPathDependsOn>
+        <TargetsForTfmSpecificContentInPackage>
+            $(TargetsForTfmSpecificContentInPackage);
+            AddSourceGenerationPackageFiles
+        </TargetsForTfmSpecificContentInPackage>
+    </PropertyGroup>
+
+    <Target
+        Name="ResolveSourceGenerationProjectReferences"
+        Condition="'$(IsSourceGenerator)' == 'true'"
+        DependsOnTargets="ResolveReferences"
+        AfterTargets="ResolveReferences">
+        <ItemGroup>
+            <_SourceGenerationAnalyzerDependency
+                Include="@(ReferenceCopyLocalPaths)"
+                Condition="
+                    '%(ReferenceCopyLocalPaths.ReferenceSourceTarget)' == 'ProjectReference' and
+                    '%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+
+            <TargetPathWithTargetPlatformMoniker
+                Include="@(_SourceGenerationAnalyzerDependency)"
+                KeepDuplicates="false">
+                <IncludeRuntimeDependency>false</IncludeRuntimeDependency>
+            </TargetPathWithTargetPlatformMoniker>
+        </ItemGroup>
+    </Target>
+
+    <Target
+        Name="AddSourceGenerationPackageFiles"
+        Condition="'$(IsSourceGenerator)' == 'true'"
+        DependsOnTargets="ResolveSourceGenerationProjectReferences">
+        <ItemGroup>
+            <TfmSpecificPackageFile Include="$(TargetPath)">
+                <PackagePath>analyzers/dotnet/cs</PackagePath>
+            </TfmSpecificPackageFile>
+            <TfmSpecificPackageFile Include="@(_SourceGenerationAnalyzerDependency)">
+                <PackagePath>analyzers/dotnet/cs</PackagePath>
+            </TfmSpecificPackageFile>
+
+            <_SourceGenerationConsumerLibrary
+                Include="@(_SourceGenerationAnalyzerDependency)"
+                Condition="'%(_SourceGenerationAnalyzerDependency.IncludeInConsumerPackage)' == 'true'" />
+            <TfmSpecificPackageFile Include="@(_SourceGenerationConsumerLibrary)">
+                <PackagePath>lib/netstandard2.0</PackagePath>
+            </TfmSpecificPackageFile>
+        </ItemGroup>
+    </Target>
 
     <ItemGroup Condition="'$(IsTests)' == 'true'">
         <ProjectReference
             Condition="Exists('$(OwnSharedProject)')"
             Include="$(OwnSharedProject)" />
     </ItemGroup>
-
-    <Import
-        Condition="'$(IsSourceGenerator)' == 'true'"
-        Project="$(MSBuildThisFileDirectory)..\source\SourceGeneration\Include.targets"
-        Label="Shared" />
 
     <ItemGroup Condition="($(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared')">
         <ProjectReference Include="$(UtilsSharedProject)" />

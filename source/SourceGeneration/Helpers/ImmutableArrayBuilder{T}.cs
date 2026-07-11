@@ -14,7 +14,7 @@ namespace SourceGeneration.Helpers;
 /// A helper type to build sequences of values with pooled buffers.
 /// </summary>
 /// <typeparam name="T">The type of items to create sequences for.</typeparam>
-internal struct ImmutableArrayBuilder<T> : IDisposable
+public struct ImmutableArrayBuilder<T> : IDisposable
 {
     /// <summary>
     /// The shared <see cref="ObjectPool{T}"/> instance to share <see cref="Writer"/> objects.
