@@ -47,4 +47,21 @@ public class Tests
             public sealed partial class Hello : IStuff {}
         """);
     }
+
+    [Fact]
+    public Task GenericTypeTest()
+    {
+        return _helper.Verify("""
+            using AutoImplementedProperties.Attributes;
+
+            public interface IStuff<TKey, TValue>
+            {
+                TKey Key { get; set; }
+                TValue Value { get; set; }
+            }
+
+            [AutoImplementProperties]
+            public sealed partial class Hello<TKey, TValue> : IStuff<TKey, TValue> {}
+        """);
+    }
 }

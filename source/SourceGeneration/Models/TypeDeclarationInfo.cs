@@ -10,19 +10,37 @@ namespace SourceGeneration.Models;
 /// <summary>
 /// A model describing one type declaration in a generated partial declaration path.
 /// </summary>
-internal readonly record struct TypeDeclarationInfo(
+internal sealed record class TypeDeclarationInfo(
     string Name,
     TypeKind Kind,
     bool IsRecord,
     Accessibility Accessibility = Accessibility.NotApplicable,
-    bool AllowsInstanceFieldsAcrossPartials = false)
+    bool AllowsInstanceFieldsAcrossPartials = false,
+    EquatableArray<string> TypeParameterNames = default)
 {
     public static TypeDeclarationInfo From(INamedTypeSymbol typeSymbol)
     {
         return new(
             typeSymbol.Name,
             typeSymbol.TypeKind,
-            typeSymbol.IsRecord);
+            typeSymbol.IsRecord,
+            TypeParameterNames: GetTypeParameterNames(typeSymbol));
+    }
+
+    private static EquatableArray<string> GetTypeParameterNames(INamedTypeSymbol typeSymbol)
+    {
+        if (typeSymbol.TypeParameters.IsDefaultOrEmpty)
+        {
+            return default;
+        }
+
+        using var typeParameterNames = ImmutableArrayBuilder<string>.Rent();
+        foreach (var typeParameter in typeSymbol.TypeParameters)
+        {
+            typeParameterNames.Add(typeParameter.Name);
+        }
+
+        return typeParameterNames.ToImmutable();
     }
 
     /// <summary>
@@ -54,6 +72,18 @@ internal readonly record struct TypeDeclarationInfo(
                 .WithCloseBraceToken(Token(SyntaxKind.CloseBraceToken)),
             _ => ClassDeclaration(Name),
         };
+
+        if (!TypeParameterNames.IsDefaultOrEmpty)
+        {
+            using var typeParameters = ImmutableArrayBuilder<TypeParameterSyntax>.Rent();
+            foreach (var typeParameterName in TypeParameterNames)
+            {
+                typeParameters.Add(TypeParameter(Identifier(typeParameterName)));
+            }
+
+            syntax = syntax.WithTypeParameterList(
+                TypeParameterList(SeparatedList(typeParameters.ToArray())));
+        }
 
         if (AllowsInstanceFieldsAcrossPartials && Kind == TypeKind.Struct)
         {
@@ -98,6 +128,17 @@ internal readonly record struct TypeDeclarationInfo(
         });
 
         writer.Write(Name);
+        if (!TypeParameterNames.IsDefaultOrEmpty)
+        {
+            writer.Write("<");
+            var typeParameters = writer.WriteDelimited();
+            foreach (var typeParameterName in TypeParameterNames)
+            {
+                typeParameters.Write(typeParameterName);
+            }
+
+            writer.Write(">");
+        }
     }
 
     private static SyntaxTokenList GetAccessibilityModifiers(Accessibility accessibility)
