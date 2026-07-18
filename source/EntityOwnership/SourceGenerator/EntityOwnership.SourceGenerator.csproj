@@ -3,14 +3,4 @@
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
-
-  <ItemGroup>
-    <SourceGenerationProjectReference Include="..\..\SourceGeneration\SourceGeneration.csproj" />
-    <SourceGenerationProjectReference
-      Include="..\..\Utils.Shared\Utils.Shared.csproj"
-      IncludeInConsumerPackage="true" />
-    <SourceGenerationProjectReference
-      Include="..\Shared\EntityOwnership.Shared.csproj"
-      IncludeInConsumerPackage="true" />
-  </ItemGroup>
 </Project>

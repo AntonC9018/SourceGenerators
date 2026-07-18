@@ -1,11 +1,2 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <SourceGenerationProjectReference Include="..\..\SourceGeneration\SourceGeneration.csproj" />
-    <SourceGenerationProjectReference
-      Include="..\..\Utils.Shared\Utils.Shared.csproj"
-      IncludeInConsumerPackage="true" />
-    <SourceGenerationProjectReference
-      Include="..\Shared\AutoImplementedProperties.Shared.csproj"
-      IncludeInConsumerPackage="true" />
-  </ItemGroup>
 </Project>

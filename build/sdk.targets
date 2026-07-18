@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <PropertyGroup>
+        <SourceGenerationProject>$(MSBuildThisFileDirectory)..\source\SourceGeneration\SourceGeneration.csproj</SourceGenerationProject>
         <UtilsSharedProject>$(MSBuildThisFileDirectory)..\source\Utils.Shared\Utils.Shared.csproj</UtilsSharedProject>
     </PropertyGroup>
 
@@ -33,6 +34,17 @@
             <IncludeInConsumerPackage>false</IncludeInConsumerPackage>
         </SourceGenerationProjectReference>
     </ItemDefinitionGroup>
+
+    <ItemGroup Condition="'$(IsSourceGenerator)' == 'true'">
+        <SourceGenerationProjectReference Include="$(SourceGenerationProject)" />
+        <SourceGenerationProjectReference
+            Include="$(UtilsSharedProject)"
+            IncludeInConsumerPackage="true" />
+        <SourceGenerationProjectReference
+            Condition="Exists('$(OwnSharedProject)')"
+            Include="$(OwnSharedProject)"
+            IncludeInConsumerPackage="true" />
+    </ItemGroup>
 
     <!--
       Generation-time dependencies are private compilation references. Their resolved copy-local
