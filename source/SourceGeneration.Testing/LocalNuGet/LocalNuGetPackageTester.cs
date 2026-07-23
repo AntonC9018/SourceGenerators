@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using CliWrap;
+using CliWrap.Buffered;
 
 namespace SourceGeneration.Testing.LocalNuGet;
 
@@ -158,6 +160,7 @@ public sealed class LocalNuGetPackageTester
     private readonly string _repositoryRoot;
     private readonly string _configuration;
     private readonly TimeSpan _commandTimeout;
+    private readonly Command _dotNetCommand;
 
     public LocalNuGetPackageTester(string repositoryRoot)
         : this(repositoryRoot, new LocalNuGetPackageTesterOptions())
@@ -191,6 +194,13 @@ public sealed class LocalNuGetPackageTester
         _repositoryRoot = Path.GetFullPath(repositoryRoot);
         _configuration = options.Configuration;
         _commandTimeout = options.CommandTimeout;
+        _dotNetCommand = Cli.Wrap("dotnet")
+            .WithWorkingDirectory(_repositoryRoot)
+            .WithEnvironmentVariables(environment => environment
+                .Set("DOTNET_NOLOGO", "1")
+                .Set("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1")
+                .Set("MSBUILDDISABLENODEREUSE", "1"))
+            .WithValidation(CommandResultValidation.None);
     }
 
     public async Task AssertAsync(
@@ -268,10 +278,9 @@ public sealed class LocalNuGetPackageTester
                 throw new FileNotFoundException("Package project was not found.", projectPath);
             }
 
-            await RunDotNetOrThrowAsync(
-                    new[] { "build", projectPath, "--configuration", _configuration },
-                    _repositoryRoot,
-                    cancellationToken)
+            var project = CreateProjectCommands(projectPath, _repositoryRoot);
+
+            await RunDotNetOrThrowAsync(project.Build(), cancellationToken)
                 .ConfigureAwait(false);
 
             var existingPackages = Directory
@@ -280,16 +289,7 @@ public sealed class LocalNuGetPackageTester
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             await RunDotNetOrThrowAsync(
-                    new[]
-                    {
-                        "pack",
-                        projectPath,
-                        "--configuration",
-                        _configuration,
-                        "--no-build",
-                        "-p:PackageOutputPath=" + tempFeed,
-                    },
-                    _repositoryRoot,
+                    project.Pack(tempFeed, noBuild: true),
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -305,7 +305,8 @@ public sealed class LocalNuGetPackageTester
                     $"Expected '{projectPath}' to produce exactly one .nupkg, but found {newPackages.Length}.");
             }
 
-            var package = ReadPackedPackage(newPackages[0]);
+            var package = await ReadPackedPackageAsync(newPackages[0], cancellationToken)
+                .ConfigureAwait(false);
             if (packages.ContainsKey(package.Id))
             {
                 throw new InvalidOperationException($"Package id '{package.Id}' was produced more than once.");
@@ -331,7 +332,12 @@ public sealed class LocalNuGetPackageTester
         Directory.CreateDirectory(fixtureRoot);
 
         var nuGetConfigPath = Path.Combine(fixtureRoot, "NuGet.Config");
-        WriteNuGetConfig(nuGetConfigPath, tempFeed, globalPackagesFolder);
+        await WriteNuGetConfigAsync(
+                nuGetConfigPath,
+                tempFeed,
+                globalPackagesFolder,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         switch (fixture.Kind)
         {
@@ -371,21 +377,19 @@ public sealed class LocalNuGetPackageTester
         }
 
         var tempFilePath = Path.Combine(fixtureRoot, Path.GetFileName(sourcePath));
-        File.Copy(sourcePath, tempFilePath);
-        InjectFilePackageVersions(tempFilePath, packages);
+        await CopyFileAsync(sourcePath, tempFilePath, cancellationToken)
+            .ConfigureAwait(false);
+        await InjectFilePackageVersionsAsync(tempFilePath, packages, cancellationToken)
+            .ConfigureAwait(false);
 
-        await RunDotNetOrThrowAsync(
-                new[] { "build", tempFilePath, "--configuration", _configuration, "--no-cache" },
-                fixtureRoot,
-                cancellationToken)
+        var project = CreateProjectCommands(tempFilePath, fixtureRoot, "--file");
+
+        await RunDotNetOrThrowAsync(project.Build(noCache: true), cancellationToken)
             .ConfigureAwait(false);
 
         if (fixture.Run is not null)
         {
-            var result = await RunDotNetAsync(
-                    new[] { "run", "--file", tempFilePath, "--configuration", _configuration, "--no-build" },
-                    fixtureRoot,
-                    cancellationToken)
+            var result = await RunDotNetAsync(project.Run(noBuild: true), cancellationToken)
                 .ConfigureAwait(false);
 
             AssertRunResult(
@@ -407,23 +411,21 @@ public sealed class LocalNuGetPackageTester
             throw new DirectoryNotFoundException($"Project-directory consumer fixture was not found: {sourcePath}");
         }
 
-        CopyDirectory(sourcePath, fixtureRoot);
-        InjectProjectPackageVersions(fixtureRoot, packages);
+        await CopyDirectoryAsync(sourcePath, fixtureRoot, cancellationToken)
+            .ConfigureAwait(false);
+        await InjectProjectPackageVersionsAsync(fixtureRoot, packages, cancellationToken)
+            .ConfigureAwait(false);
 
         var mainProjectPath = ResolveMainProjectPath(fixture, fixtureRoot);
 
-        await RunDotNetOrThrowAsync(
-                new[] { "build", mainProjectPath, "--configuration", _configuration, "--no-cache" },
-                fixtureRoot,
-                cancellationToken)
+        var project = CreateProjectCommands(mainProjectPath, fixtureRoot);
+
+        await RunDotNetOrThrowAsync(project.Build(noCache: true), cancellationToken)
             .ConfigureAwait(false);
 
         if (fixture.Run is not null)
         {
-            var result = await RunDotNetAsync(
-                    new[] { "run", "--project", mainProjectPath, "--configuration", _configuration, "--no-build" },
-                    fixtureRoot,
-                    cancellationToken)
+            var result = await RunDotNetAsync(project.Run(noBuild: true), cancellationToken)
                 .ConfigureAwait(false);
 
             AssertRunResult(
@@ -504,12 +506,14 @@ public sealed class LocalNuGetPackageTester
         }
     }
 
-    private static void InjectFilePackageVersions(
+    private static async Task InjectFilePackageVersionsAsync(
         string filePath,
-        IReadOnlyDictionary<string, PackedPackage> packages)
+        IReadOnlyDictionary<string, PackedPackage> packages,
+        CancellationToken cancellationToken)
     {
         var matchedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var text = File.ReadAllText(filePath);
+        var text = await File.ReadAllTextAsync(filePath, cancellationToken)
+            .ConfigureAwait(false);
         var updatedText = PackageDirectiveRegex.Replace(text, match =>
         {
             var id = match.Groups["id"].Value;
@@ -527,12 +531,14 @@ public sealed class LocalNuGetPackageTester
         });
 
         ThrowIfMissingPackageReferences(filePath, packages, matchedPackages);
-        File.WriteAllText(filePath, updatedText);
+        await File.WriteAllTextAsync(filePath, updatedText, cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    private static void InjectProjectPackageVersions(
+    private static async Task InjectProjectPackageVersionsAsync(
         string fixtureRoot,
-        IReadOnlyDictionary<string, PackedPackage> packages)
+        IReadOnlyDictionary<string, PackedPackage> packages,
+        CancellationToken cancellationToken)
     {
         var matchedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var projectPaths = Directory
@@ -546,7 +552,11 @@ public sealed class LocalNuGetPackageTester
 
         foreach (var projectPath in projectPaths)
         {
-            var document = XDocument.Load(projectPath, LoadOptions.PreserveWhitespace);
+            var document = await LoadDocumentAsync(
+                    projectPath,
+                    LoadOptions.PreserveWhitespace,
+                    cancellationToken)
+                .ConfigureAwait(false);
             foreach (var packageReference in document
                          .Descendants()
                          .Where(static e => e.Name.LocalName == "PackageReference"))
@@ -561,7 +571,12 @@ public sealed class LocalNuGetPackageTester
                 matchedPackages.Add(include);
             }
 
-            document.Save(projectPath, SaveOptions.DisableFormatting);
+            await SaveDocumentAsync(
+                    document,
+                    projectPath,
+                    SaveOptions.DisableFormatting,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         ThrowIfMissingPackageReferences(fixtureRoot, packages, matchedPackages);
@@ -585,9 +600,12 @@ public sealed class LocalNuGetPackageTester
         }
     }
 
-    private static PackedPackage ReadPackedPackage(string packagePath)
+    private static async Task<PackedPackage> ReadPackedPackageAsync(
+        string packagePath,
+        CancellationToken cancellationToken)
     {
-        using var archive = ZipFile.OpenRead(packagePath);
+        await using var packageStream = OpenReadStream(packagePath);
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read);
         var nuspecEntry = archive
             .Entries
             .SingleOrDefault(static e => e.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
@@ -597,8 +615,12 @@ public sealed class LocalNuGetPackageTester
             throw new InvalidOperationException($"Package '{packagePath}' does not contain a .nuspec file.");
         }
 
-        using var stream = nuspecEntry.Open();
-        var document = XDocument.Load(stream);
+        await using var stream = nuspecEntry.Open();
+        var document = await XDocument.LoadAsync(
+                stream,
+                LoadOptions.None,
+                cancellationToken)
+            .ConfigureAwait(false);
         var ns = document.Root?.Name.Namespace ?? XNamespace.None;
         var metadata = document.Root?.Element(ns + "metadata");
         var id = metadata?.Element(ns + "id")?.Value;
@@ -613,11 +635,10 @@ public sealed class LocalNuGetPackageTester
     }
 
     private async Task RunDotNetOrThrowAsync(
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
+        DotNetCommand command,
         CancellationToken cancellationToken)
     {
-        var result = await RunDotNetAsync(arguments, workingDirectory, cancellationToken)
+        var result = await RunDotNetAsync(command, cancellationToken)
             .ConfigureAwait(false);
 
         if (result.ExitCode != 0)
@@ -634,113 +655,63 @@ public sealed class LocalNuGetPackageTester
     }
 
     private async Task<DotNetCommandResult> RunDotNetAsync(
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
+        DotNetCommand command,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-
-        startInfo.Environment["DOTNET_NOLOGO"] = "1";
-        startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
-        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = new Process
-        {
-            StartInfo = startInfo,
-        };
-
         using var commandCancellationTokenSource =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         commandCancellationTokenSource.CancelAfter(_commandTimeout);
-        var commandCancellationToken = commandCancellationTokenSource.Token;
-
-        var processStarted = false;
-        Task<string>? standardOutputTask = null;
-        Task<string>? standardErrorTask = null;
 
         try
         {
-            commandCancellationToken.ThrowIfCancellationRequested();
-
-            if (!process.Start())
-            {
-                throw new InvalidOperationException("Failed to start dotnet.");
-            }
-
-            processStarted = true;
-            standardOutputTask = process.StandardOutput.ReadToEndAsync();
-            standardErrorTask = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync(commandCancellationToken).ConfigureAwait(false);
-
-            var standardOutput = await standardOutputTask.ConfigureAwait(false);
-            var standardError = await standardErrorTask.ConfigureAwait(false);
+            var result = await command.Command
+                .ExecuteBufferedAsync(commandCancellationTokenSource.Token)
+                .ConfigureAwait(false);
 
             return new DotNetCommandResult(
-                "dotnet",
-                arguments.ToArray(),
-                workingDirectory,
-                process.ExitCode,
-                standardOutput,
-                standardError);
+                command.Command.TargetFilePath,
+                command.Arguments,
+                command.Command.WorkingDirPath,
+                result.ExitCode,
+                result.StandardOutput,
+                result.StandardError);
         }
         catch (OperationCanceledException exception)
         {
-            if (processStarted)
-            {
-                await TerminateProcessAsync(process).ConfigureAwait(false);
-
-                if (standardOutputTask is not null && standardErrorTask is not null)
-                {
-                    await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false);
-                }
-            }
-
             cancellationToken.ThrowIfCancellationRequested();
 
             throw new TimeoutException(
                 $"dotnet command timed out after {_commandTimeout}. "
-                + $"Command: dotnet {string.Join(" ", arguments)}. "
-                + $"Working directory: {workingDirectory}.",
+                + $"Command: {command.Command.TargetFilePath} {command.Command.Arguments}. "
+                + $"Working directory: {command.Command.WorkingDirPath}.",
                 exception);
         }
     }
 
-    private static void WriteNuGetConfig(
+    private static Task WriteNuGetConfigAsync(
         string path,
         string tempFeed,
-        string globalPackagesFolder)
+        string globalPackagesFolder,
+        CancellationToken cancellationToken)
     {
-        var document = new XDocument(
-            new XElement(
-                "configuration",
-                new XElement(
-                    "config",
-                    new XElement(
-                        "add",
-                        new XAttribute("key", "globalPackagesFolder"),
-                        new XAttribute("value", globalPackagesFolder))),
-                new XElement(
-                    "packageSources",
-                    new XElement("clear"),
-                    new XElement(
-                        "add",
-                        new XAttribute("key", "local"),
-                        new XAttribute("value", tempFeed)))));
+        var escapedTempFeed = SecurityElement.Escape(tempFeed);
+        var escapedGlobalPackagesFolder = SecurityElement.Escape(globalPackagesFolder);
 
-        document.Save(path);
+        return File.WriteAllTextAsync(
+            path,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{escapedGlobalPackagesFolder}" />
+              </config>
+              <packageSources>
+                <clear />
+                <add key="local" value="{escapedTempFeed}" />
+              </packageSources>
+            </configuration>
+            """,
+            cancellationToken);
     }
 
     private string ResolveRepositoryPath(string path)
@@ -750,7 +721,22 @@ public sealed class LocalNuGetPackageTester
             : Path.Combine(_repositoryRoot, path));
     }
 
-    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
+    private DotNetProjectCommands CreateProjectCommands(
+        string projectPath,
+        string workingDirectory,
+        string runTargetOption = "--project")
+    {
+        return new DotNetProjectCommands(
+            _dotNetCommand.WithWorkingDirectory(workingDirectory),
+            projectPath,
+            _configuration,
+            runTargetOption);
+    }
+
+    private static async Task CopyDirectoryAsync(
+        string sourceDirectory,
+        string destinationDirectory,
+        CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destinationDirectory);
 
@@ -762,13 +748,77 @@ public sealed class LocalNuGetPackageTester
                 continue;
             }
 
-            CopyDirectory(directory, Path.Combine(destinationDirectory, directoryName));
+            await CopyDirectoryAsync(
+                    directory,
+                    Path.Combine(destinationDirectory, directoryName),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         foreach (var file in Directory.EnumerateFiles(sourceDirectory))
         {
-            File.Copy(file, Path.Combine(destinationDirectory, Path.GetFileName(file)));
+            await CopyFileAsync(
+                    file,
+                    Path.Combine(destinationDirectory, Path.GetFileName(file)),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
+    }
+
+    private static async Task CopyFileAsync(
+        string sourcePath,
+        string destinationPath,
+        CancellationToken cancellationToken)
+    {
+        await using var source = OpenReadStream(sourcePath);
+        await using var destination = new FileStream(
+            destinationPath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            FileOptions.Asynchronous);
+
+        await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<XDocument> LoadDocumentAsync(
+        string path,
+        LoadOptions options,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = OpenReadStream(path);
+        return await XDocument.LoadAsync(stream, options, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task SaveDocumentAsync(
+        XDocument document,
+        string path,
+        SaveOptions options,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 4096,
+            FileOptions.Asynchronous);
+
+        await document.SaveAsync(stream, options, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static FileStream OpenReadStream(string path)
+    {
+        return new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
     }
 
     private static bool IsBuildOutputDirectory(string directoryName)
@@ -794,22 +844,6 @@ public sealed class LocalNuGetPackageTester
         return builder.ToString();
     }
 
-    private static async Task TerminateProcessAsync(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (InvalidOperationException)
-        {
-        }
-
-        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-    }
-
     private static void DeleteDirectoryBestEffort(string path)
     {
         try
@@ -829,6 +863,10 @@ public sealed class LocalNuGetPackageTester
 
     private sealed record PackedPackage(string Id, string Version, string PackagePath);
 
+    private sealed record DotNetCommand(
+        Command Command,
+        IReadOnlyList<string> Arguments);
+
     private sealed record DotNetCommandResult(
         string FileName,
         IReadOnlyList<string> Arguments,
@@ -836,6 +874,80 @@ public sealed class LocalNuGetPackageTester
         int ExitCode,
         string StandardOutput,
         string StandardError);
+
+    private sealed class DotNetProjectCommands
+    {
+        private readonly Command _baseCommand;
+        private readonly string _projectPath;
+        private readonly string _configuration;
+        private readonly string _runTargetOption;
+
+        public DotNetProjectCommands(
+            Command baseCommand,
+            string projectPath,
+            string configuration,
+            string runTargetOption)
+        {
+            _baseCommand = baseCommand;
+            _projectPath = projectPath;
+            _configuration = configuration;
+            _runTargetOption = runTargetOption;
+        }
+
+        public DotNetCommand Build(bool noCache = false)
+        {
+            return Create(
+                "build",
+                targetOption: null,
+                noCache ? new[] { "--no-cache" } : Array.Empty<string>());
+        }
+
+        public DotNetCommand Pack(string packageOutputPath, bool noBuild = false)
+        {
+            var options = new List<string>();
+            if (noBuild)
+            {
+                options.Add("--no-build");
+            }
+
+            options.Add("-p:PackageOutputPath=" + packageOutputPath);
+            return Create("pack", targetOption: null, options);
+        }
+
+        public DotNetCommand Run(bool noBuild = false)
+        {
+            return Create(
+                "run",
+                _runTargetOption,
+                noBuild ? new[] { "--no-build" } : Array.Empty<string>());
+        }
+
+        private DotNetCommand Create(
+            string verb,
+            string? targetOption,
+            IReadOnlyCollection<string> options)
+        {
+            var arguments = new List<string>(5 + options.Count)
+            {
+                verb,
+            };
+
+            if (targetOption is not null)
+            {
+                arguments.Add(targetOption);
+            }
+
+            arguments.Add(_projectPath);
+            arguments.Add("--configuration");
+            arguments.Add(_configuration);
+            arguments.AddRange(options);
+
+            var argumentArray = arguments.ToArray();
+            return new DotNetCommand(
+                _baseCommand.WithArguments(argumentArray),
+                argumentArray);
+        }
+    }
 }
 
 internal enum ConsumerFixtureKind
