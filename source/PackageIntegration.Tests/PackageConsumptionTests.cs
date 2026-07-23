@@ -1,5 +1,3 @@
-using System.IO;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using SourceGeneration.Testing.LocalNuGet;
 using Xunit;
@@ -8,14 +6,13 @@ namespace PackageIntegration.Tests;
 
 public sealed class PackageConsumptionTests
 {
-    private static readonly string RepositoryRoot = GetRepositoryRoot();
-
-    private readonly LocalNuGetPackageTester _tester = new(RepositoryRoot);
+    private readonly Task<LocalNuGetPackageTester> _testerTask =
+        LocalNuGetPackageTester.CreateAsync().AsTask();
 
     [Fact]
     public Task AutoImplementedPropertiesPackage()
     {
-        return _tester.AssertAsync(new PackageConsumptionTest(
+        return AssertAsync(new PackageConsumptionTest(
             nameof(AutoImplementedPropertiesPackage),
             new[]
             {
@@ -36,7 +33,7 @@ public sealed class PackageConsumptionTests
     [Fact]
     public Task AutoConstructorPackage()
     {
-        return _tester.AssertAsync(new PackageConsumptionTest(
+        return AssertAsync(new PackageConsumptionTest(
             nameof(AutoConstructorPackage),
             new[]
             {
@@ -53,7 +50,7 @@ public sealed class PackageConsumptionTests
     [Fact]
     public Task PropertyCacheHelperPackage()
     {
-        return _tester.AssertAsync(new PackageConsumptionTest(
+        return AssertAsync(new PackageConsumptionTest(
             nameof(PropertyCacheHelperPackage),
             new[]
             {
@@ -70,7 +67,7 @@ public sealed class PackageConsumptionTests
     [Fact]
     public Task EntityOwnershipPackage()
     {
-        return _tester.AssertAsync(new PackageConsumptionTest(
+        return AssertAsync(new PackageConsumptionTest(
             nameof(EntityOwnershipPackage),
             new[]
             {
@@ -84,11 +81,9 @@ public sealed class PackageConsumptionTests
             }));
     }
 
-    private static string GetRepositoryRoot([CallerFilePath] string sourceFilePath = "")
+    private async Task AssertAsync(PackageConsumptionTest test)
     {
-        return Path.GetFullPath(Path.Combine(
-            Path.GetDirectoryName(sourceFilePath)!,
-            "..",
-            ".."));
+        var tester = await _testerTask;
+        await tester.AssertAsync(test);
     }
 }
