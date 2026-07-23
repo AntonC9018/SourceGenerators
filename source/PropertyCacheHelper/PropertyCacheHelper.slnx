@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="../SourceGeneration.Testing/SourceGeneration.Testing.csproj" />
+  <Project Path="../SourceGeneration/SourceGeneration.csproj" />
+  <Project Path="../Utils.Shared/Utils.Shared.csproj" />
+  <Project Path="Shared/PropertyCacheHelper.Shared.csproj" />
+  <Project Path="SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj" />
+  <Project Path="Tests/PropertyCacheHelper.Tests.csproj" />
+</Solution>

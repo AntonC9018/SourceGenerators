@@ -1,0 +1,20 @@
+<Solution>
+  <Project Path="source/AutoConstructor/Sample/AutoConstructor.Sample.csproj" />
+  <Project Path="source/AutoConstructor/Shared/AutoConstructor.Shared.csproj" />
+  <Project Path="source/AutoConstructor/SourceGenerator/AutoConstructor.SourceGenerator.csproj" />
+  <Project Path="source/AutoImplementedProperties/Sample/AutoImplementedProperties.Sample.csproj" />
+  <Project Path="source/AutoImplementedProperties/Shared/AutoImplementedProperties.Shared.csproj" />
+  <Project Path="source/AutoImplementedProperties/SourceGenerator/AutoImplementedProperties.SourceGenerator.csproj" />
+  <Project Path="source/AutoImplementedProperties/Tests/AutoImplementedProperties.Tests.csproj" />
+  <Project Path="source/EntityOwnership/Sample/EntityOwnership.Sample.csproj" />
+  <Project Path="source/EntityOwnership/Shared/EntityOwnership.Shared.csproj" />
+  <Project Path="source/EntityOwnership/SourceGenerator/EntityOwnership.SourceGenerator.csproj" />
+  <Project Path="source/EntityOwnership/Tests/EntityOwnership.Tests.csproj" />
+  <Project Path="source/PackageIntegration.Tests/PackageIntegration.Tests.csproj" />
+  <Project Path="source/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj" />
+  <Project Path="source/PropertyCacheHelper/SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj" />
+  <Project Path="source/PropertyCacheHelper/Tests/PropertyCacheHelper.Tests.csproj" />
+  <Project Path="source/SourceGeneration.Testing/SourceGeneration.Testing.csproj" />
+  <Project Path="source/SourceGeneration/SourceGeneration.csproj" />
+  <Project Path="source/Utils.Shared/Utils.Shared.csproj" />
+</Solution>
