@@ -1,8 +1,7 @@
 using System.Threading.Tasks;
-using AutoImplementedProperties.Tests;
 using PropertyCacheHelper.Shared;
 using PropertyCacheHelper.SourceGenerator;
-using VerifyXunit;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace PropertyCacheHelper.Tests;
@@ -59,20 +58,20 @@ public class Tests
             }
 
             [CachePropertyInfo]
-            public sealed class Derived
+            public sealed class Derived : Base
             {
                 public int IdDerived { get; set; }
             }
 
             [CachePropertyInfo]
-            public sealed class OtherDerived
+            public sealed class OtherDerived : Base
             {
                 [CachePropertyInfo]
                 public int IdDerived { get; set; }
                 public string? Ignored { get; set; }
             }
 
-            public sealed class NotGeneratedDerived
+            public sealed class NotGeneratedDerived : Base
             {
                 [CachePropertyInfo]
                 public int IdDerived { get; set; }

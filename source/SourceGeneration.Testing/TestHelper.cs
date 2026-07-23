@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -11,7 +10,7 @@ using VerifyTests;
 using VerifyXunit;
 using Basic.Reference.Assemblies;
 
-namespace AutoImplementedProperties.Tests;
+namespace SourceGeneration.Testing;
 
 public static class ModuleInitializer
 {
@@ -111,11 +110,11 @@ public static class TestHelper
 {
     public static IEnumerable<MetadataReference> GetAllMetadataReferences(params Type[] requiredTypes)
     {
-        var defaultMetadataReferences = ReferenceAssemblies.NetStandard20;
+        var defaultMetadataReferences = ReferenceAssemblies.Net80;
         var additionalTypes = requiredTypes;
         var assemblyPaths = additionalTypes.Select(t => t.Assembly.Location).Distinct();
         var additionalMetadataReferences = assemblyPaths.Select(a => MetadataReference.CreateFromFile(a));
-        var allMetadataReferences = defaultMetadataReferences.Concat(additionalMetadataReferences);
+        var allMetadataReferences = defaultMetadataReferences.Concat(additionalMetadataReferences).Distinct();
         return allMetadataReferences;
     }
 }

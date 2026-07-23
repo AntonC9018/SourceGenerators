@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net11.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CliWrap" Version="3.10.2" />
+        <PackageReference Include="NuGet.Configuration" Version="7.6.0" />
+        <PackageReference Include="Verify.Xunit" Version="26.2.0" />
+        <PackageReference Include="Verify.SourceGenerators" Version="2.3.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" PrivateAssets="all" />
+        <PackageReference Include="Basic.Reference.Assemblies" Version="1.7.2" />
+    </ItemGroup>
+</Project>

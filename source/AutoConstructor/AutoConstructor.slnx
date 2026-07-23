@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="../SourceGeneration/SourceGeneration.csproj" />
+  <Project Path="../Utils.Shared/Utils.Shared.csproj" />
+  <Project Path="Sample/AutoConstructor.Sample.csproj" />
+  <Project Path="Shared/AutoConstructor.Shared.csproj" />
+  <Project Path="SourceGenerator/AutoConstructor.SourceGenerator.csproj" />
+</Solution>

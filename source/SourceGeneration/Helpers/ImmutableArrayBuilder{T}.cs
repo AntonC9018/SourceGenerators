@@ -14,7 +14,7 @@ namespace SourceGeneration.Helpers;
 /// A helper type to build sequences of values with pooled buffers.
 /// </summary>
 /// <typeparam name="T">The type of items to create sequences for.</typeparam>
-internal struct ImmutableArrayBuilder<T> : IDisposable
+public struct ImmutableArrayBuilder<T> : IDisposable
 {
     /// <summary>
     /// The shared <see cref="ObjectPool{T}"/> instance to share <see cref="Writer"/> objects.
@@ -45,9 +45,9 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
     }
 
     /// <summary>
-    /// Gets the data written to the underlying buffer so far, as a <see cref="ReadOnlySpan{T}"/>.
+    /// Gets the data written to the underlying buffer so far, as a <see cref="Span{T}"/>.
     /// </summary>
-    public readonly ReadOnlySpan<T> WrittenSpan
+    public readonly Span<T> WrittenSpan
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get => writer!.WrittenSpan;
@@ -122,6 +122,11 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         }
     }
 
+    public void Clear()
+    {
+        writer!.Clear();
+    }
+
     /// <summary>
     /// A class handling the actual buffer writing.
     /// </summary>
@@ -155,7 +160,7 @@ internal struct ImmutableArrayBuilder<T> : IDisposable
         }
 
         /// <inheritdoc cref="ImmutableArrayBuilder{T}.WrittenSpan"/>
-        public ReadOnlySpan<T> WrittenSpan
+        public Span<T> WrittenSpan
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => new(array, 0, index);

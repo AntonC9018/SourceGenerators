@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using AutoImplementedProperties.Attributes;
 using AutoImplementedProperties.SourceGenerator;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace AutoImplementedProperties.Tests;
@@ -44,6 +45,23 @@ public class Tests
 
             [AutoImplementProperties]
             public sealed partial class Hello : IStuff {}
+        """);
+    }
+
+    [Fact]
+    public Task GenericTypeTest()
+    {
+        return _helper.Verify("""
+            using AutoImplementedProperties.Attributes;
+
+            public interface IStuff<TKey, TValue>
+            {
+                TKey Key { get; set; }
+                TValue Value { get; set; }
+            }
+
+            [AutoImplementProperties]
+            public sealed partial class Hello<TKey, TValue> : IStuff<TKey, TValue> {}
         """);
     }
 }

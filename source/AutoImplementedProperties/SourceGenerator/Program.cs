@@ -31,7 +31,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
         {
             var compilationUnit = GeneratePartialImplementingUnimplementedMembers(item);
             context.AddSource(
-                item.Hierarchy.FullyQualifiedMetadataName + ".AutoProps.g.cs",
+                item.DeclarationPath.HintName + ".AutoProps.g.cs",
                 compilationUnit.GetText(Encoding.UTF8));
         });
     }
@@ -52,7 +52,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
             || OverloadedPropertiesToImplement.Any();
         public required EquatableArray<Property> PropertiesToImplement { get; init; }
         public required EquatableArray<OverloadedProperty> OverloadedPropertiesToImplement { get; init; }
-        public required HierarchyInfo Hierarchy { get; init; }
+        public required TypeDeclarationPath DeclarationPath { get; init; }
     }
 
     private static Info GetInfo(ShouldBeAutogened.TypedGeneratorContext context)
@@ -160,13 +160,13 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
             }
         }
 
-        var hierarchyInfo = HierarchyInfo.From(context.TargetSymbol);
+        var declarationPath = TypeDeclarationPath.FromExisting(context.TargetSymbol);
 
         return new Info
         {
             PropertiesToImplement = propertiesToImplement.ToImmutable(),
             OverloadedPropertiesToImplement = overloadedPropertiesToImplement.ToImmutable(),
-            Hierarchy = hierarchyInfo,
+            DeclarationPath = declarationPath,
         };
     }
 
@@ -206,7 +206,7 @@ public sealed class AutoImplementedPropertyGenerator : IIncrementalGenerator
         }
 
         var members = propertyDeclarations.ToArray();
-        var result = info.Hierarchy.GetSyntax(members);
+        var result = info.DeclarationPath.ToCompilationUnit(members);
         return result;
     }
 }

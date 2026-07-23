@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="../SourceGeneration.Testing/SourceGeneration.Testing.csproj" />
+  <Project Path="../SourceGeneration/SourceGeneration.csproj" />
+  <Project Path="../Utils.Shared/Utils.Shared.csproj" />
+  <Project Path="Sample/AutoImplementedProperties.Sample.csproj" />
+  <Project Path="Shared/AutoImplementedProperties.Shared.csproj" />
+  <Project Path="SourceGenerator/AutoImplementedProperties.SourceGenerator.csproj" />
+  <Project Path="Tests/AutoImplementedProperties.Tests.csproj" />
+</Solution>

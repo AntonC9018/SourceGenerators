@@ -7,7 +7,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="IFieldSymbol"/> types.
 /// </summary>
-internal static class IFieldSymbolExtensions
+public static class IFieldSymbolExtensions
 {
     /// <summary>
     /// Gets the fully qualified metadata name for a given <see cref="IFieldSymbol"/> instance.

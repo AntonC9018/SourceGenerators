@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="../SourceGeneration.Testing/SourceGeneration.Testing.csproj" />
+  <Project Path="../SourceGeneration/SourceGeneration.csproj" />
+  <Project Path="../Utils.Shared/Utils.Shared.csproj" />
+  <Project Path="Sample/EntityOwnership.Sample.csproj" />
+  <Project Path="Shared/EntityOwnership.Shared.csproj" />
+  <Project Path="SourceGenerator/EntityOwnership.SourceGenerator.csproj" />
+  <Project Path="Tests/EntityOwnership.Tests.csproj" />
+</Solution>

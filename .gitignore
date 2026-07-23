@@ -3,3 +3,4 @@ obj
 /.idea
 /artifacts
 *.received.cs
+*.user.sln

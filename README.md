@@ -6,6 +6,16 @@ The original repository can be found [here](https://dev.azure.com/flowqe-inc/Flo
 
 It's licensed under MIT.
 
+## Solutions
+
+Open `SourceGenerators.slnx` to work with the complete repository, or use the
+solution in an individual generator's directory for a smaller scope.
+
+Regenerate all `.slnx` files with:
+
+```shell
+./build/generate-solutions.sh
+```
 
 ## Notes
 

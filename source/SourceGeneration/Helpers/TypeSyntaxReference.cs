@@ -27,4 +27,5 @@ public record struct TypeSyntaxReference(string FullyQualifiedName)
     public static implicit operator string(TypeSyntaxReference d) => d.FullyQualifiedName;
     public readonly TypeSyntax AsSyntax() => SyntaxFactory.ParseTypeName(FullyQualifiedName);
     public readonly NameSyntax AsNameSyntax() => SyntaxFactory.ParseName(FullyQualifiedName);
+    public readonly override string ToString() => FullyQualifiedName;
 }
