@@ -62,6 +62,13 @@ public sealed record RunOptions(
     string? StandardOutputContains = null,
     string? StandardErrorContains = null);
 
+public sealed record LocalNuGetPackageTesterOptions
+{
+    public string Configuration { get; init; } = "Release";
+
+    public TimeSpan CommandTimeout { get; init; } = TimeSpan.FromMinutes(5);
+}
+
 public sealed class DotNetCommandFailedException : Exception
 {
     internal DotNetCommandFailedException(
@@ -149,15 +156,41 @@ public sealed class LocalNuGetPackageTester
         RegexOptions.CultureInvariant | RegexOptions.Multiline);
 
     private readonly string _repositoryRoot;
+    private readonly string _configuration;
+    private readonly TimeSpan _commandTimeout;
 
     public LocalNuGetPackageTester(string repositoryRoot)
+        : this(repositoryRoot, new LocalNuGetPackageTesterOptions())
+    {
+    }
+
+    public LocalNuGetPackageTester(
+        string repositoryRoot,
+        LocalNuGetPackageTesterOptions options)
     {
         if (string.IsNullOrWhiteSpace(repositoryRoot))
         {
             throw new ArgumentException("A repository root is required.", nameof(repositoryRoot));
         }
 
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (string.IsNullOrWhiteSpace(options.Configuration))
+        {
+            throw new ArgumentException("A build configuration is required.", nameof(options));
+        }
+
+        if (options.CommandTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.CommandTimeout,
+                "The command timeout must be positive.");
+        }
+
         _repositoryRoot = Path.GetFullPath(repositoryRoot);
+        _configuration = options.Configuration;
+        _commandTimeout = options.CommandTimeout;
     }
 
     public async Task AssertAsync(
@@ -236,7 +269,7 @@ public sealed class LocalNuGetPackageTester
             }
 
             await RunDotNetOrThrowAsync(
-                    new[] { "build", projectPath, "--configuration", "Debug" },
+                    new[] { "build", projectPath, "--configuration", _configuration },
                     _repositoryRoot,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -252,7 +285,7 @@ public sealed class LocalNuGetPackageTester
                         "pack",
                         projectPath,
                         "--configuration",
-                        "Debug",
+                        _configuration,
                         "--no-build",
                         "-p:PackageOutputPath=" + tempFeed,
                     },
@@ -342,7 +375,7 @@ public sealed class LocalNuGetPackageTester
         InjectFilePackageVersions(tempFilePath, packages);
 
         await RunDotNetOrThrowAsync(
-                new[] { "build", tempFilePath, "--no-cache" },
+                new[] { "build", tempFilePath, "--configuration", _configuration, "--no-cache" },
                 fixtureRoot,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -350,7 +383,7 @@ public sealed class LocalNuGetPackageTester
         if (fixture.Run is not null)
         {
             var result = await RunDotNetAsync(
-                    new[] { "run", "--file", tempFilePath, "--no-build" },
+                    new[] { "run", "--file", tempFilePath, "--configuration", _configuration, "--no-build" },
                     fixtureRoot,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -380,7 +413,7 @@ public sealed class LocalNuGetPackageTester
         var mainProjectPath = ResolveMainProjectPath(fixture, fixtureRoot);
 
         await RunDotNetOrThrowAsync(
-                new[] { "build", mainProjectPath, "--no-cache" },
+                new[] { "build", mainProjectPath, "--configuration", _configuration, "--no-cache" },
                 fixtureRoot,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -388,7 +421,7 @@ public sealed class LocalNuGetPackageTester
         if (fixture.Run is not null)
         {
             var result = await RunDotNetAsync(
-                    new[] { "run", "--project", mainProjectPath, "--no-build" },
+                    new[] { "run", "--project", mainProjectPath, "--configuration", _configuration, "--no-build" },
                     fixtureRoot,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -600,7 +633,7 @@ public sealed class LocalNuGetPackageTester
         }
     }
 
-    private static async Task<DotNetCommandResult> RunDotNetAsync(
+    private async Task<DotNetCommandResult> RunDotNetAsync(
         IReadOnlyList<string> arguments,
         string workingDirectory,
         CancellationToken cancellationToken)
@@ -629,16 +662,28 @@ public sealed class LocalNuGetPackageTester
             StartInfo = startInfo,
         };
 
-        if (!process.Start())
-        {
-            throw new InvalidOperationException("Failed to start dotnet.");
-        }
+        using var commandCancellationTokenSource =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        commandCancellationTokenSource.CancelAfter(_commandTimeout);
+        var commandCancellationToken = commandCancellationTokenSource.Token;
+
+        var processStarted = false;
+        Task<string>? standardOutputTask = null;
+        Task<string>? standardErrorTask = null;
 
         try
         {
-            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            commandCancellationToken.ThrowIfCancellationRequested();
+
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("Failed to start dotnet.");
+            }
+
+            processStarted = true;
+            standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            standardErrorTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync(commandCancellationToken).ConfigureAwait(false);
 
             var standardOutput = await standardOutputTask.ConfigureAwait(false);
             var standardError = await standardErrorTask.ConfigureAwait(false);
@@ -651,10 +696,25 @@ public sealed class LocalNuGetPackageTester
                 standardOutput,
                 standardError);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
-            TryKill(process);
-            throw;
+            if (processStarted)
+            {
+                await TerminateProcessAsync(process).ConfigureAwait(false);
+
+                if (standardOutputTask is not null && standardErrorTask is not null)
+                {
+                    await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false);
+                }
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            throw new TimeoutException(
+                $"dotnet command timed out after {_commandTimeout}. "
+                + $"Command: dotnet {string.Join(" ", arguments)}. "
+                + $"Working directory: {workingDirectory}.",
+                exception);
         }
     }
 
@@ -694,19 +754,27 @@ public sealed class LocalNuGetPackageTester
     {
         Directory.CreateDirectory(destinationDirectory);
 
-        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory, "*", SearchOption.AllDirectories))
+        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
         {
-            var relativePath = Path.GetRelativePath(sourceDirectory, directory);
-            Directory.CreateDirectory(Path.Combine(destinationDirectory, relativePath));
+            var directoryName = Path.GetFileName(directory);
+            if (IsBuildOutputDirectory(directoryName))
+            {
+                continue;
+            }
+
+            CopyDirectory(directory, Path.Combine(destinationDirectory, directoryName));
         }
 
-        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory))
         {
-            var relativePath = Path.GetRelativePath(sourceDirectory, file);
-            var destinationPath = Path.Combine(destinationDirectory, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-            File.Copy(file, destinationPath);
+            File.Copy(file, Path.Combine(destinationDirectory, Path.GetFileName(file)));
         }
+    }
+
+    private static bool IsBuildOutputDirectory(string directoryName)
+    {
+        return string.Equals(directoryName, "bin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(directoryName, "obj", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SanitizeFileName(string value)
@@ -726,7 +794,7 @@ public sealed class LocalNuGetPackageTester
         return builder.ToString();
     }
 
-    private static void TryKill(Process process)
+    private static async Task TerminateProcessAsync(Process process)
     {
         try
         {
@@ -738,6 +806,8 @@ public sealed class LocalNuGetPackageTester
         catch (InvalidOperationException)
         {
         }
+
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     private static void DeleteDirectoryBestEffort(string path)

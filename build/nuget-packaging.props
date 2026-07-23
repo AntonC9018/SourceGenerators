@@ -72,7 +72,7 @@
         <IsPublishedProject>false</IsPublishedProject>
         <IsPublishedProject Condition="$(ProjectDirectoryWithSlashes.StartsWith('source/')) AND '$(IsTests)' == 'false'">true</IsPublishedProject>
         <IsPackagedProject>false</IsPackagedProject>
-        <IsPackagedProject Condition="'$(IsPublishedProject)' == 'true' AND '$(IsAnalyzersProject)' == 'false'">true</IsPackagedProject>
+        <IsPackagedProject Condition="'$(IsPublishedProject)' == 'true' AND '$(IsAnalyzers)' == 'false'">true</IsPackagedProject>
         <IsTestProject>$(ProjectDirectoryWithSlashes.StartsWith('tests/'))</IsTestProject>
         <IsInternalsTestProject>false</IsInternalsTestProject>
         <IsInternalsTestProject Condition="$(IsTestProject) AND $(MSBuildProjectName.EndsWith('.Internals'))">true</IsInternalsTestProject>
