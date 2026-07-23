@@ -157,9 +157,8 @@ public sealed class LocalNuGetPackageTester
         CancellationToken cancellationToken)
     {
         var consumerDirectory = workspace.CreateConsumerDirectory(fixture.Path);
-        await workspace.WriteNuGetConfigAsync(
-            consumerDirectory,
-            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        workspace.WriteNuGetConfig(consumerDirectory);
 
         var consumer = await _fixtureSetup.PrepareAsync(
             fixture,

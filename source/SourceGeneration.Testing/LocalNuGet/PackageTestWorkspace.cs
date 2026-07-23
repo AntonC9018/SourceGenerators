@@ -1,10 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Security;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using NuGet.Configuration;
 
 namespace SourceGeneration.Testing.LocalNuGet;
 
@@ -52,29 +50,21 @@ internal sealed class PackageTestWorkspace : IDisposable
         return path;
     }
 
-    public Task WriteNuGetConfigAsync(
-        string consumerDirectory,
-        CancellationToken cancellationToken)
+    public void WriteNuGetConfig(string consumerDirectory)
     {
-        var escapedFeedPath = EscapeXmlAttribute(FeedPath);
-        var escapedGlobalPackagesPath = EscapeXmlAttribute(GlobalPackagesPath);
-        var path = Path.Combine(consumerDirectory, "NuGet.Config");
-
-        return File.WriteAllTextAsync(
-            path,
-            $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="{escapedGlobalPackagesPath}" />
-              </config>
-              <packageSources>
-                <clear />
-                <add key="local" value="{escapedFeedPath}" />
-              </packageSources>
-            </configuration>
-            """,
-            cancellationToken);
+        var settings = new Settings(consumerDirectory, "NuGet.Config");
+        settings.AddOrUpdate(
+            ConfigurationConstants.Config,
+            new AddItem(
+                ConfigurationConstants.GlobalPackagesFolder,
+                GlobalPackagesPath));
+        settings.AddOrUpdate(
+            ConfigurationConstants.PackageSources,
+            new ClearItem());
+        settings.AddOrUpdate(
+            ConfigurationConstants.PackageSources,
+            new SourceItem("local", FeedPath));
+        settings.SaveToDisk();
     }
 
     public void Preserve()
@@ -103,11 +93,6 @@ internal sealed class PackageTestWorkspace : IDisposable
         catch (UnauthorizedAccessException)
         {
         }
-    }
-
-    private static string EscapeXmlAttribute(string value)
-    {
-        return SecurityElement.Escape(value)!;
     }
 
     private static string SanitizeFileName(string value)

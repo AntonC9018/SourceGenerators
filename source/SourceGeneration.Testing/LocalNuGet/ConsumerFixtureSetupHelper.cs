@@ -341,11 +341,12 @@ internal sealed class ConsumerFixtureSetupHelper
     {
         bool Check(string name)
         {
-            string.Equals(
+            return string.Equals(
                 directoryName,
                 name,
-                StringComparison.OrdinalIgnoreCase)
+                StringComparison.OrdinalIgnoreCase);
         }
+
         return Check("bin") || Check("obj");
     }
 }
