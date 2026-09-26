@@ -35,7 +35,7 @@ namespace SourceGeneration.Helpers;
 /// </para>
 /// </summary>
 /// <typeparam name="T">The type of objects to pool.</typeparam>
-internal sealed class ObjectPool<T>
+public sealed class ObjectPool<T>
     where T : class
 {
     /// <summary>

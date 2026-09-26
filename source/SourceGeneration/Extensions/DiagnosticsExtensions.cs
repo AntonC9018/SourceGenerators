@@ -7,7 +7,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="GeneratorExecutionContext"/>, specifically for reporting diagnostics.
 /// </summary>
-internal static class DiagnosticsExtensions
+public static class DiagnosticsExtensions
 {
     /// <summary>
     /// Adds a new diagnostics to the target builder.

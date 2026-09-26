@@ -7,7 +7,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="IMethodSymbol"/> types.
 /// </summary>
-internal static class IMethodSymbolExtensions
+public static class IMethodSymbolExtensions
 {
     /// <summary>
     /// Gets the fully qualified metadata name for a given <see cref="IMethodSymbol"/> instance.

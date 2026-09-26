@@ -9,7 +9,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for the <see cref="IncrementalValueProvider{TValue}"/> type.
 /// </summary>
-internal static class IncrementalValueProviderExtensions
+public static class IncrementalValueProviderExtensions
 {
     /// <summary>
     /// Combines three <see cref="IncrementalValueProvider{TValue}"/> instances.

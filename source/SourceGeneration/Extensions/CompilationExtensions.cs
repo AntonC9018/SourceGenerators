@@ -9,7 +9,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for the <see cref="Compilation"/> type.
 /// </summary>
-internal static class CompilationExtensions
+public static class CompilationExtensions
 {
     /// <summary>
     /// <para>

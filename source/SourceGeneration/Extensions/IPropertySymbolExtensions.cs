@@ -7,7 +7,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="IPropertySymbol"/> types.
 /// </summary>
-internal static class IPropertySymbolExtensions
+public static class IPropertySymbolExtensions
 {
     /// <summary>
     /// Gets the fully qualified metadata name for a given <see cref="IPropertySymbol"/> instance.

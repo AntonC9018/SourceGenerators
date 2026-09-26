@@ -6,7 +6,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for the <see cref="AttributeData"/> type.
 /// </summary>
-internal static class AttributeDataExtensions
+public static class AttributeDataExtensions
 {
     /// <summary>
     /// Tries to get a constructor argument at a given index from the input <see cref="AttributeData"/> instance.

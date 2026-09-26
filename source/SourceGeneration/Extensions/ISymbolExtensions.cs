@@ -5,7 +5,7 @@ namespace SourceGeneration.Extensions;
 /// <summary>
 /// Extension methods for <see cref="ISymbol"/> types.
 /// </summary>
-internal static class ISymbolExtensions
+public static class ISymbolExtensions
 {
     /// <summary>
     /// A custom <see cref="SymbolDisplayFormat"/> instance with fully qualified style, without global::.

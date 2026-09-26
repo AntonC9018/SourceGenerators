@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <Compile Remove="Consumers/**/*.cs" />
+        <None Include="Consumers/**/*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\SourceGenerator\PropertyCacheHelper.SourceGenerator.csproj"/>
+    </ItemGroup>
+</Project>
