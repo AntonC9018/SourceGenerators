@@ -76,9 +76,17 @@ jobs:
     needs: [build-packages]
     runs-on: ubuntu-latest
     if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
+    permissions:
+      id-token: write
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: nuget_packages
         path: artifacts
-    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://api.nuget.org/v3/index.json" --api-key ${{secrets.NUGET_KEY}} --skip-duplicate
+    - name: NuGet login (OIDC → temporary API key)
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+    - name: Publish packages to NuGet.org
+      run: dotnet nuget push "artifacts/*.nupkg" --source "https://api.nuget.org/v3/index.json" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
