@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using SourceGeneration.Testing.LocalNuGet;
 using Xunit;
 
-namespace PackageIntegration.Tests;
+namespace SourceGeneration.Testing.Tests;
 
 public sealed class RepositoryRootDiscoveryTests
 {

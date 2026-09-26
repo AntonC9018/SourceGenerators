@@ -6,12 +6,26 @@ script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd -- "$script_directory/.." && pwd)"
 
 source_project_paths() {
-    git -C "$repository_root" ls-files \
-        --cached \
-        --others \
-        --exclude-standard \
-        -z \
-        -- 'source/**/*.csproj'
+    local relative_project
+
+    while IFS= read -r -d '' relative_project; do
+        if [[ ! -f "$repository_root/$relative_project" ]]; then
+            continue
+        fi
+
+        if [[ "$relative_project" == source/SourceGenerators/*/Tests/Consumers/* ]]; then
+            continue
+        fi
+
+        printf '%s\0' "$relative_project"
+    done < <(
+        git -C "$repository_root" ls-files \
+            --cached \
+            --others \
+            --exclude-standard \
+            -z \
+            -- 'source/**/*.csproj'
+    )
 }
 
 regenerate_solution() {
@@ -49,7 +63,7 @@ regenerate_product_solution() {
     local -a product_projects=()
 
     while IFS= read -r -d '' relative_project; do
-        if [[ "$relative_project" != "source/$product_name/"* ]]; then
+        if [[ "$relative_project" != "source/SourceGenerators/$product_name/"* ]]; then
             continue
         fi
 
@@ -72,7 +86,7 @@ regenerate_product_solution() {
     fi
 
     regenerate_solution \
-        "$repository_root/source/$product_name/$product_name.slnx" \
+        "$repository_root/source/SourceGenerators/$product_name/$product_name.slnx" \
         "${product_projects[@]}"
 }
 
@@ -90,10 +104,6 @@ main() {
     done
 
     while IFS= read -r -d '' relative_project; do
-        if [[ "$relative_project" == source/PackageIntegration.Tests/Consumers/* ]]; then
-            continue
-        fi
-
         master_projects+=("$repository_root/$relative_project")
     done < <(source_project_paths)
 
