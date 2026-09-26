@@ -8,7 +8,8 @@ using System.Linq;
 
 var children = new[]
 {
-    new Child { Id = "child", RootId = 1, Root = new Root { Id = 1 } }
+    new Child { Id = "child", RootId = 1, Root = new Root { Id = 1 } },
+    new Child { Id = "other-child", RootId = 2, Root = new Root { Id = 2 } }
 }.AsQueryable();
 
 var result = children.RootOwnerFilter(1).Single();
