@@ -5,5 +5,5 @@
   <Project Path="Sample/AutoConstructor.Sample.csproj" />
   <Project Path="Shared/AutoConstructor.Shared.csproj" />
   <Project Path="SourceGenerator/AutoConstructor.SourceGenerator.csproj" />
-  <Project Path="Tests/AutoConstructor.Tests.csproj" />
+  <Project Path="Tests/AutoConstructor.SourceGenerator.Tests.csproj" />
 </Solution>

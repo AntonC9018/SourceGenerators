@@ -29,6 +29,10 @@
         <OwnSharedProject>$(MSBuildProjectDirectory)\..\Shared\$(ProjectBaseName).Shared.csproj</OwnSharedProject>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(IsSourceGeneratorTests)' == 'true'">
+        <OwnSourceGeneratorProject>$(MSBuildProjectDirectory)\..\SourceGenerator\$(ProjectBaseName).SourceGenerator.csproj</OwnSourceGeneratorProject>
+    </PropertyGroup>
+
     <ItemDefinitionGroup>
         <SourceGenerationProjectReference>
             <IncludeInConsumerPackage>false</IncludeInConsumerPackage>
@@ -116,6 +120,12 @@
         <ProjectReference
             Condition="Exists('$(OwnSharedProject)')"
             Include="$(OwnSharedProject)" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsSourceGeneratorTests)' == 'true'">
+        <ProjectReference
+            Condition="Exists('$(OwnSourceGeneratorProject)')"
+            Include="$(OwnSourceGeneratorProject)" />
     </ItemGroup>
 
     <ItemGroup Condition="($(MSBuildProjectName.EndsWith('Shared')) and '$(MSBuildProjectName)' != 'Utils.Shared')">

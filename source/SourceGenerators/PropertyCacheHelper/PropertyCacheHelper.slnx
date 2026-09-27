@@ -4,5 +4,5 @@
   <Project Path="../../Utils.Shared/Utils.Shared.csproj" />
   <Project Path="Shared/PropertyCacheHelper.Shared.csproj" />
   <Project Path="SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj" />
-  <Project Path="Tests/PropertyCacheHelper.Tests.csproj" />
+  <Project Path="Tests/PropertyCacheHelper.SourceGenerator.Tests.csproj" />
 </Solution>

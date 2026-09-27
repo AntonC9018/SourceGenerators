@@ -12,10 +12,6 @@ name: .NET
 # added to the two root jobs below instead. If canceled, the whole workflow will stop.
 on: [push, pull_request]
 
-env:
-  EXCLUDE_RUN_ID_FROM_PACKAGE: false
-  EXCLUDE_SUFFIX_FROM_VERSION: false
-
 jobs:
   # Pack all projects with dotnet/MSBuild to generate NuGet packages.
   # This workflow also uploads the resulting packages as artifacts.
@@ -29,8 +25,15 @@ jobs:
       uses: actions/checkout@v4
     - name: Setup dotnet
       uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+        dotnet-version: 10.0.x
     - name: Build Utils.Shared
       run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
+    - name: Build SourceGeneration
+      run: dotnet pack source/SourceGeneration/SourceGeneration.csproj -c Release
+    - name: Build SourceGeneration SDK
+      run: dotnet pack source/SourceGeneration.Sdk/SourceGeneration.Sdk.csproj -c Release
 
     - name: Build PropertyCacheHelper.Shared
       run: dotnet pack source/SourceGenerators/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj -c Release
@@ -49,6 +52,8 @@ jobs:
 
     - name: Test
       run: dotnet test SourceGenerators.slnx -c Release
+    - name: Test SDK package from local feed
+      run: ./build/test-sdk-consumer.sh
 
     # Upload the packages to the pipeline artifacts
     - name: Upload package artifacts
@@ -58,20 +63,7 @@ jobs:
         path: artifacts/*.nupkg
         if-no-files-found: error
 
-  # Publish the packages to GitHub packages
-  publish-github:
-    needs: [build-packages]
-    runs-on: ubuntu-latest
-    #if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
-    if: ${{github.event_name == 'push'}}
-    steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: nuget_packages
-        path: artifacts
-    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
-
-  # Publish the packages to GitHub packages
+  # Publish the packages to NuGet.org
   publish-nuget:
     needs: [build-packages]
     runs-on: ubuntu-latest

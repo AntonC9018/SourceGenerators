@@ -5,5 +5,5 @@
   <Project Path="Sample/EntityOwnership.Sample.csproj" />
   <Project Path="Shared/EntityOwnership.Shared.csproj" />
   <Project Path="SourceGenerator/EntityOwnership.SourceGenerator.csproj" />
-  <Project Path="Tests/EntityOwnership.Tests.csproj" />
+  <Project Path="Tests/EntityOwnership.SourceGenerator.Tests.csproj" />
 </Solution>

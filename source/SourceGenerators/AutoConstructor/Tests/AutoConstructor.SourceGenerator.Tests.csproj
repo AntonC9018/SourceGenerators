@@ -3,8 +3,4 @@
         <Compile Remove="Consumers/**/*.cs" />
         <None Include="Consumers/**/*" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\SourceGenerator\EntityOwnership.SourceGenerator.csproj"/>
-    </ItemGroup>
 </Project>

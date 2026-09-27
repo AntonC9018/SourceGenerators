@@ -1,0 +1,47 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <IsSourceGenerator>$(MSBuildProjectName.EndsWith('.SourceGenerator'))</IsSourceGenerator>
+    <IsAnalyzers>$(MSBuildProjectName.EndsWith('.Analyzers'))</IsAnalyzers>
+    <IsCodeFixes>$(MSBuildProjectName.EndsWith('.CodeFixes'))</IsCodeFixes>
+    <IsPackage>$(MSBuildProjectName.EndsWith('.Package'))</IsPackage>
+    <IsTests>$(MSBuildProjectName.EndsWith('.Tests'))</IsTests>
+    <IsSourceGeneratorTests>$(MSBuildProjectName.EndsWith('.SourceGenerator.Tests'))</IsSourceGeneratorTests>
+    <IsAnalyzerTests>$(MSBuildProjectName.EndsWith('.Analyzers.Tests'))</IsAnalyzerTests>
+    <IsCodeFixTests>$(MSBuildProjectName.EndsWith('.CodeFixes.Tests'))</IsCodeFixTests>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsTests)' != 'true'">
+    <TargetFramework Condition="'$(TargetFramework)' == ''">netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true'">
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <NoWarn>$(NoWarn);CS1591;CS0649;CS1574;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsPackage)' == 'true'">
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true'">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsTests)' == 'true'">
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);CS1591;CA1416;IDE0251;CS0618</NoWarn>
+  </PropertyGroup>
+</Project>
