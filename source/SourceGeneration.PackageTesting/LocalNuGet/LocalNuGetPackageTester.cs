@@ -134,10 +134,9 @@ public sealed class LocalNuGetPackageTester
                     + $"but found {newPackages.Length}.");
             }
 
-            var package = await NuGetPackageReader.ReadAsync(
+            var package = await NuGetPackageReader.ReadIdentityAsync(
                 newPackages[0],
                 cancellationToken);
-            AssertPackageEntries(packageProject, package);
             if (!versions.TryAdd(package.Id, package.Version))
             {
                 throw new InvalidOperationException(
@@ -146,27 +145,6 @@ public sealed class LocalNuGetPackageTester
         }
 
         return versions;
-    }
-
-    private static void AssertPackageEntries(
-        PackageProject project,
-        PackageIdentity package)
-    {
-        if (project.ExpectedEntries is null)
-        {
-            return;
-        }
-
-        var missing = project.ExpectedEntries
-            .Where(entry => !package.Entries.Contains(entry))
-            .ToArray();
-        if (missing.Length == 0)
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            $"Package '{package.Id}' is missing entries: {string.Join(", ", missing)}.");
     }
 
     private async Task AssertConsumerAsync(

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -11,7 +10,7 @@ namespace SourceGeneration.Testing.LocalNuGet;
 
 internal static class NuGetPackageReader
 {
-    public static async Task<PackageIdentity> ReadAsync(
+    public static async Task<PackageIdentity> ReadIdentityAsync(
         string packagePath,
         CancellationToken cancellationToken)
     {
@@ -55,14 +54,8 @@ internal static class NuGetPackageReader
                 $"Package '{packagePath}' has an invalid .nuspec file.");
         }
 
-        var entries = archive.Entries
-            .Select(static entry => entry.FullName)
-            .ToHashSet(StringComparer.Ordinal);
-        return new PackageIdentity(id, version, entries);
+        return new PackageIdentity(id, version);
     }
 }
 
-internal sealed record PackageIdentity(
-    string Id,
-    string Version,
-    IReadOnlySet<string> Entries);
+internal sealed record PackageIdentity(string Id, string Version);

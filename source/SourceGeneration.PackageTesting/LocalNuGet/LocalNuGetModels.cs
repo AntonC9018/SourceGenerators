@@ -3,21 +3,33 @@ using System.Collections.Generic;
 
 namespace SourceGeneration.Testing.LocalNuGet;
 
-public sealed record PackageProject(
-    string ProjectPath,
-    IReadOnlyList<string>? ExpectedEntries = null);
+internal sealed record PackageProject(string ProjectPath);
 
-public sealed record PackageConsumptionTest(
-    string Name,
-    IReadOnlyList<PackageProject> Packages,
-    IReadOnlyList<ConsumerFixture> Consumers);
+public sealed class PackageConsumptionTest
+{
+    internal PackageConsumptionTest(
+        string name,
+        IReadOnlyList<PackageProject> packages,
+        IReadOnlyList<ConsumerFixture> consumers)
+    {
+        Name = name;
+        Packages = packages;
+        Consumers = consumers;
+    }
 
-public sealed record CodeFixExpectation(
+    internal string Name { get; }
+
+    internal IReadOnlyList<PackageProject> Packages { get; }
+
+    internal IReadOnlyList<ConsumerFixture> Consumers { get; }
+}
+
+internal sealed record CodeFixExpectation(
     string DiagnosticId,
     string SourcePath,
     string ExpectedSourcePath);
 
-public sealed record ConsumerFixture
+internal sealed record ConsumerFixture
 {
     private ConsumerFixture(
         ConsumerFixtureKind kind,
@@ -70,7 +82,7 @@ public sealed record ConsumerFixture
     }
 }
 
-public sealed record RunOptions(
+internal sealed record RunOptions(
     int ExpectedExitCode = 0,
     string? StandardOutputContains = null,
     string? StandardErrorContains = null);

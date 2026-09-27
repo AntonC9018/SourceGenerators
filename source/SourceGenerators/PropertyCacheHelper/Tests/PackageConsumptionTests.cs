@@ -11,18 +11,14 @@ public sealed class PackageConsumptionTests
     {
         var tester = await LocalNuGetPackageTester.CreateAsync();
 
-        await tester.AssertAsync(new PackageConsumptionTest(
-            nameof(PropertyCacheHelperPackage),
-            new[]
-            {
-                new PackageProject(
-                    "source/SourceGenerators/PropertyCacheHelper/SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj"),
-            },
-            new[]
-            {
-                ConsumerFixture.SingleFile(
-                    "source/SourceGenerators/PropertyCacheHelper/Tests/Consumers/PropertyCacheHelper.Basic.cs",
-                    new RunOptions()),
-            }));
+        var test = new PackageConsumptionTestBuilder(nameof(PropertyCacheHelperPackage))
+            .AddPackage(
+                "source/SourceGenerators/PropertyCacheHelper/SourceGenerator/PropertyCacheHelper.SourceGenerator.csproj")
+            .AddSingleFileConsumer(
+                "source/SourceGenerators/PropertyCacheHelper/Tests/Consumers/PropertyCacheHelper.Basic.cs",
+                consumer => consumer.ExpectRun())
+            .Build();
+
+        await tester.AssertAsync(test);
     }
 }
