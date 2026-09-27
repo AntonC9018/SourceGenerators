@@ -56,7 +56,8 @@ helper packages. Role-specific references are selected by the file name:
 The `.CodeFixes` role also references `System.Composition.AttributedModel` for
 MEF export attributes, alongside Roslyn Workspaces.
 
-Production projects target `netstandard2.0`; test projects target `net10.0`.
+SDK source generator, analyzer, and code-fix projects target `netstandard2.0`;
+test projects target `net10.0`.
 Set `TargetFramework` in a project or `Directory.Build.props` to override the
 default. This repository overrides its existing tests to `net11.0` in
 `source/Directory.Build.props`.
@@ -71,6 +72,17 @@ local NuGet feed, then build and test an external project using
 `<Project Sdk="Anton.SourceGeneration.Sdk/1.0.0">`. The script tests all project
 roles and checks that packed analyzers and generators load in consumer builds.
 The release workflow publishes packages to NuGet.org only on a push to `master`.
+
+## Package tests
+
+`Anton.SourceGeneration.PackageTesting` provides `LocalNuGetPackageTester` for
+tests that pack a project, restore it in a fresh consumer, and check the result.
+It targets `net10.0`, so the .NET 11 tests in this repository can use it too.
+`CodeFixExpectation` extends a project consumer fixture to verify a diagnostic,
+apply the packaged code fix, compare the fixed source, and build again. See the
+[package-testing README](source/SourceGeneration.PackageTesting/README.md) for
+the API and path rules. Projects that only use the SDK's Roslyn unit-test
+dependencies do not need this package.
 
 ## Solutions
 

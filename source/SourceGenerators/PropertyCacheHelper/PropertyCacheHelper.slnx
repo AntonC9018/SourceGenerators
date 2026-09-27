@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="../../SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj" />
   <Project Path="../../SourceGeneration.Testing/SourceGeneration.Testing.csproj" />
   <Project Path="../../SourceGeneration/SourceGeneration.csproj" />
   <Project Path="../../Utils.Shared/Utils.Shared.csproj" />

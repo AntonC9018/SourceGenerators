@@ -34,6 +34,8 @@ jobs:
       run: dotnet pack source/SourceGeneration/SourceGeneration.csproj -c Release
     - name: Build SourceGeneration SDK
       run: dotnet pack source/SourceGeneration.Sdk/SourceGeneration.Sdk.csproj -c Release
+    - name: Build SourceGeneration package testing helper
+      run: dotnet pack source/SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj -c Release
 
     - name: Build PropertyCacheHelper.Shared
       run: dotnet pack source/SourceGenerators/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj -c Release

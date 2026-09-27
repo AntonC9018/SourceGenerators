@@ -81,6 +81,7 @@ regenerate_product_solution() {
 
     if [[ "$has_tests" == true ]]; then
         product_projects+=(
+            "$repository_root/source/SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj"
             "$repository_root/source/SourceGeneration.Testing/SourceGeneration.Testing.csproj"
         )
     fi

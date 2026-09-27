@@ -116,14 +116,11 @@ public sealed class LocalNuGetPackageTester
             }
 
             var project = _dotNet.ForProject(projectPath, RepositoryRoot);
-
-            await _dotNet.ExecuteCheckedAsync(project.Build(), cancellationToken);
-
             var existingPackages = EnumeratePackages(feedPath)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             await _dotNet.ExecuteCheckedAsync(
-                project.Pack().NoBuild().OutputTo(feedPath),
+                project.Pack().OutputTo(feedPath),
                 cancellationToken);
 
             var newPackages = EnumeratePackages(feedPath)
@@ -137,9 +134,10 @@ public sealed class LocalNuGetPackageTester
                     + $"but found {newPackages.Length}.");
             }
 
-            var package = await NuGetPackageReader.ReadIdentityAsync(
+            var package = await NuGetPackageReader.ReadAsync(
                 newPackages[0],
                 cancellationToken);
+            AssertPackageEntries(packageProject, package);
             if (!versions.TryAdd(package.Id, package.Version))
             {
                 throw new InvalidOperationException(
@@ -148,6 +146,27 @@ public sealed class LocalNuGetPackageTester
         }
 
         return versions;
+    }
+
+    private static void AssertPackageEntries(
+        PackageProject project,
+        PackageIdentity package)
+    {
+        if (project.ExpectedEntries is null)
+        {
+            return;
+        }
+
+        var missing = project.ExpectedEntries
+            .Where(entry => !package.Entries.Contains(entry))
+            .ToArray();
+        if (missing.Length == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Package '{package.Id}' is missing entries: {string.Join(", ", missing)}.");
     }
 
     private async Task AssertConsumerAsync(
@@ -165,6 +184,7 @@ public sealed class LocalNuGetPackageTester
             consumerDirectory,
             packageVersions,
             cancellationToken);
+        CopyRepositoryGlobalJson(consumerDirectory);
         var target = consumer.Kind switch
         {
             ConsumerFixtureKind.SingleFile => _dotNet.ForFile(
@@ -179,9 +199,20 @@ public sealed class LocalNuGetPackageTester
                 "Unknown fixture kind."),
         };
 
-        await _dotNet.ExecuteCheckedAsync(
-            target.Build().NoCache(),
-            cancellationToken);
+        if (fixture.CodeFix is null)
+        {
+            await _dotNet.ExecuteCheckedAsync(
+                target.Build().NoCache(),
+                cancellationToken);
+        }
+        else
+        {
+            await AssertCodeFixAsync(
+                target,
+                fixture.CodeFix,
+                consumerDirectory,
+                cancellationToken);
+        }
 
         if (fixture.Run is null)
         {
@@ -192,6 +223,132 @@ public sealed class LocalNuGetPackageTester
             target.Run().NoBuild(),
             cancellationToken);
         AssertRunResult(result, fixture.Run);
+    }
+
+    private void CopyRepositoryGlobalJson(string consumerDirectory)
+    {
+        var repositoryGlobalJson = Path.Combine(RepositoryRoot, "global.json");
+        if (!File.Exists(repositoryGlobalJson))
+        {
+            return;
+        }
+
+        var consumerGlobalJson = Path.Combine(consumerDirectory, "global.json");
+        if (File.Exists(consumerGlobalJson))
+        {
+            return;
+        }
+
+        File.Copy(repositoryGlobalJson, consumerGlobalJson);
+    }
+
+    private async Task AssertCodeFixAsync(
+        DotNetTarget target,
+        CodeFixExpectation codeFix,
+        string consumerDirectory,
+        CancellationToken cancellationToken)
+    {
+        ValidateCodeFix(codeFix);
+
+        var sourcePath = Path.GetFullPath(
+            Path.Combine(consumerDirectory, codeFix.SourcePath));
+        var expectedPath = ResolveRepositoryPath(codeFix.ExpectedSourcePath);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException(
+                "The consumer source file was not found.",
+                sourcePath);
+        }
+
+        if (!File.Exists(expectedPath))
+        {
+            throw new FileNotFoundException(
+                "The expected fixed source file was not found.",
+                expectedPath);
+        }
+
+        var build = target.Build()
+            .NoCache()
+            .WarningsAsErrors(codeFix.DiagnosticId);
+        var beforeFix = await _dotNet.ExecuteAsync(build, cancellationToken);
+        if (beforeFix.IsSuccess)
+        {
+            throw new DotNetCommandFailedException(
+                $"Expected diagnostic {codeFix.DiagnosticId} before the code fix.",
+                beforeFix);
+        }
+
+        var diagnosticMarker = "error " + codeFix.DiagnosticId;
+        if (!ContainsDiagnostic(beforeFix, diagnosticMarker))
+        {
+            throw new DotNetCommandFailedException(
+                $"The consumer failed without diagnostic {codeFix.DiagnosticId}.",
+                beforeFix);
+        }
+
+        var format = target.FormatAnalyzers(codeFix.DiagnosticId);
+        await _dotNet.ExecuteCheckedAsync(format, cancellationToken);
+
+        var actualSource = await File.ReadAllTextAsync(
+            sourcePath,
+            cancellationToken);
+        var expectedSource = await File.ReadAllTextAsync(
+            expectedPath,
+            cancellationToken);
+        var normalizedActual = NormalizeLineEndings(actualSource);
+        var normalizedExpected = NormalizeLineEndings(expectedSource);
+        if (!string.Equals(normalizedActual, normalizedExpected, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The code fix did not produce the expected source. "
+                + $"Expected: {expectedPath}. Actual: {sourcePath}.");
+        }
+
+        var finalBuild = target.Build()
+            .NoCache()
+            .WarningsAsErrors(codeFix.DiagnosticId);
+        await _dotNet.ExecuteCheckedAsync(finalBuild, cancellationToken);
+    }
+
+    private static bool ContainsDiagnostic(
+        DotNetCommandResult result,
+        string diagnosticMarker)
+    {
+        if (result.StandardOutput.Contains(diagnosticMarker, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (result.StandardError.Contains(diagnosticMarker, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ValidateCodeFix(CodeFixExpectation codeFix)
+    {
+        if (string.IsNullOrWhiteSpace(codeFix.DiagnosticId))
+        {
+            throw new ArgumentException("A diagnostic id is required.", nameof(codeFix));
+        }
+
+        if (string.IsNullOrWhiteSpace(codeFix.SourcePath))
+        {
+            throw new ArgumentException("A consumer source path is required.", nameof(codeFix));
+        }
+
+        if (string.IsNullOrWhiteSpace(codeFix.ExpectedSourcePath))
+        {
+            throw new ArgumentException("An expected source path is required.", nameof(codeFix));
+        }
+    }
+
+    private static string NormalizeLineEndings(string source)
+    {
+        return source.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
     }
 
     private static void AssertRunResult(

@@ -2,5 +2,6 @@
     <ItemGroup>
         <Compile Remove="Consumers/**/*.cs" />
         <None Include="Consumers/**/*" CopyToOutputDirectory="PreserveNewest" />
+        <ProjectReference Include="../../../SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj" />
     </ItemGroup>
 </Project>

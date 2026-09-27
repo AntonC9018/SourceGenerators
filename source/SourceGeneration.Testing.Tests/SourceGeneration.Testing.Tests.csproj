@@ -1,2 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <ProjectReference Include="../SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj" />
+    </ItemGroup>
 </Project>

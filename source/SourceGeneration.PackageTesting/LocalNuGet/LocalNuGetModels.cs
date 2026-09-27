@@ -3,12 +3,19 @@ using System.Collections.Generic;
 
 namespace SourceGeneration.Testing.LocalNuGet;
 
-public sealed record PackageProject(string ProjectPath);
+public sealed record PackageProject(
+    string ProjectPath,
+    IReadOnlyList<string>? ExpectedEntries = null);
 
 public sealed record PackageConsumptionTest(
     string Name,
     IReadOnlyList<PackageProject> Packages,
     IReadOnlyList<ConsumerFixture> Consumers);
+
+public sealed record CodeFixExpectation(
+    string DiagnosticId,
+    string SourcePath,
+    string ExpectedSourcePath);
 
 public sealed record ConsumerFixture
 {
@@ -16,12 +23,14 @@ public sealed record ConsumerFixture
         ConsumerFixtureKind kind,
         string path,
         string? mainProjectPath,
-        RunOptions? run)
+        RunOptions? run,
+        CodeFixExpectation? codeFix)
     {
         Kind = kind;
         Path = path;
         MainProjectPath = mainProjectPath;
         Run = run;
+        CodeFix = codeFix;
     }
 
     public string Path { get; }
@@ -29,6 +38,8 @@ public sealed record ConsumerFixture
     public string? MainProjectPath { get; }
 
     public RunOptions? Run { get; }
+
+    public CodeFixExpectation? CodeFix { get; }
 
     internal ConsumerFixtureKind Kind { get; }
 
@@ -40,19 +51,22 @@ public sealed record ConsumerFixture
             ConsumerFixtureKind.SingleFile,
             path,
             mainProjectPath: null,
-            run);
+            run,
+            codeFix: null);
     }
 
     public static ConsumerFixture ProjectDirectory(
         string path,
         string? mainProjectPath = null,
-        RunOptions? run = null)
+        RunOptions? run = null,
+        CodeFixExpectation? codeFix = null)
     {
         return new ConsumerFixture(
             ConsumerFixtureKind.ProjectDirectory,
             path,
             mainProjectPath,
-            run);
+            run,
+            codeFix);
     }
 }
 
