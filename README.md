@@ -53,6 +53,9 @@ helper packages. Role-specific references are selected by the file name:
 | `.CodeFixes.Tests` | `.Analyzers`, `.CodeFixes` | Tests a code fix |
 | `.Tests` | None | Tests shared code or helpers |
 
+The `.CodeFixes` role also references `System.Composition.AttributedModel` for
+MEF export attributes, alongside Roslyn Workspaces.
+
 Production projects target `netstandard2.0`; test projects target `net10.0`.
 Set `TargetFramework` in a project or `Directory.Build.props` to override the
 default. This repository overrides its existing tests to `net11.0` in

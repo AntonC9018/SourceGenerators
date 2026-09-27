@@ -4,6 +4,7 @@
     <AntonUtilsSharedVersion Condition="'$(AntonUtilsSharedVersion)' == ''">1.0.1</AntonUtilsSharedVersion>
     <AntonRoslynVersion Condition="'$(AntonRoslynVersion)' == ''">4.10.0</AntonRoslynVersion>
     <AntonPolySharpVersion Condition="'$(AntonPolySharpVersion)' == ''">1.14.1</AntonPolySharpVersion>
+    <AntonCompositionVersion Condition="'$(AntonCompositionVersion)' == ''">8.0.0</AntonCompositionVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsTests)' == 'true' or '$(IsPackage)' == 'true'">
@@ -24,6 +25,7 @@
 
   <ItemGroup Condition="'$(IsCodeFixes)' == 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(AntonRoslynVersion)" PrivateAssets="all" />
+    <PackageReference Include="System.Composition.AttributedModel" Version="$(AntonCompositionVersion)" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IsTests)' == 'true'">
