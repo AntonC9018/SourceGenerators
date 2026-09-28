@@ -15,6 +15,8 @@ dotnet pack "$repository_root/source/Utils.Shared/Utils.Shared.csproj" \
     --configuration Release --output "$feed"
 dotnet pack "$repository_root/source/SourceGeneration/SourceGeneration.csproj" \
     --configuration Release --output "$feed"
+dotnet pack "$repository_root/source/SourceGeneration.RoslynTesting/SourceGeneration.RoslynTesting.csproj" \
+    --configuration Release --output "$feed"
 dotnet pack "$repository_root/source/SourceGeneration.Sdk/SourceGeneration.Sdk.csproj" \
     --configuration Release --output "$feed"
 
@@ -54,6 +56,9 @@ from zipfile import ZipFile
 
 feed = Path(argv[1])
 expected = {
+    "Anton.SourceGeneration.RoslynTesting.1.0.0.nupkg": {
+        "lib/net10.0/Anton.SourceGeneration.RoslynTesting.dll",
+    },
     "Anton.SourceGeneration.Sdk.1.0.0.nupkg": {
         "Sdk/Sdk.props",
         "Sdk/Sdk.targets",

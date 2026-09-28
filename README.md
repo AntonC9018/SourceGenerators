@@ -55,6 +55,11 @@ helper packages. Role-specific references are selected by the file name:
 
 The `.CodeFixes` role also references `System.Composition.AttributedModel` for
 MEF export attributes, alongside Roslyn Workspaces.
+The `.Analyzers.Tests` and `.CodeFixes.Tests` roles reference
+`Anton.SourceGeneration.RoslynTesting` and add a static using for
+`InterpolateDiagnostic`. See the
+[Roslyn testing README](source/SourceGeneration.RoslynTesting/README.md) for
+`TestCode` and the test builders.
 
 SDK source generator, analyzer, and code-fix projects target `netstandard2.0`;
 test projects target `net10.0`.

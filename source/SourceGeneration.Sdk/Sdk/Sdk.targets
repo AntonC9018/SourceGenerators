@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <AntonSourceGenerationVersion Condition="'$(AntonSourceGenerationVersion)' == ''">1.0.0</AntonSourceGenerationVersion>
+    <AntonRoslynTestingVersion Condition="'$(AntonRoslynTestingVersion)' == ''">1.0.0</AntonRoslynTestingVersion>
     <AntonUtilsSharedVersion Condition="'$(AntonUtilsSharedVersion)' == ''">1.0.1</AntonUtilsSharedVersion>
     <AntonRoslynVersion Condition="'$(AntonRoslynVersion)' == ''">4.10.0</AntonRoslynVersion>
     <AntonPolySharpVersion Condition="'$(AntonPolySharpVersion)' == ''">1.14.1</AntonPolySharpVersion>
@@ -49,6 +50,11 @@
 
   <ItemGroup Condition="'$(IsCodeFixTests)' == 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.4" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true'">
+    <PackageReference Include="Anton.SourceGeneration.RoslynTesting" Version="$(AntonRoslynTestingVersion)" />
+    <Using Include="SourceGeneration.Testing.DiagnosticMarkers" Static="true" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsTests)' == 'true' or '$(IsPackage)' == 'true'">

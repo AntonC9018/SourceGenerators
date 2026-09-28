@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Testing;
+using SourceGeneration.Testing;
 using Xunit;
 
 namespace Probe;
@@ -10,12 +10,13 @@ public sealed class ProbeCodeFixTests
     [Fact]
     public async Task RenamesClass()
     {
-        var test = new CSharpCodeFixTest<ProbeAnalyzer, ProbeCodeFix, DefaultVerifier>
-        {
-            TestCode = "class {|PROBE001:BadName|} { }",
-            FixedCode = "class GoodName\n{ }",
-        };
+        var source = TestCode.Create(
+            $"class {InterpolateDiagnostic("BadName", ProbeAnalyzer.Rule)} {{ }}");
 
-        await test.RunAsync();
+        await CodeFixTestBuilder
+            .For<ProbeAnalyzer, ProbeCodeFix, DefaultVerifier>()
+            .WithSource(source)
+            .WithFixedCode("class GoodName\n{ }")
+            .RunAsync();
     }
 }

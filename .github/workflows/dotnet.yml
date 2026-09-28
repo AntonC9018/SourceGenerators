@@ -32,6 +32,8 @@ jobs:
       run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
     - name: Build SourceGeneration
       run: dotnet pack source/SourceGeneration/SourceGeneration.csproj -c Release
+    - name: Build SourceGeneration Roslyn testing helper
+      run: dotnet pack source/SourceGeneration.RoslynTesting/SourceGeneration.RoslynTesting.csproj -c Release
     - name: Build SourceGeneration SDK
       run: dotnet pack source/SourceGeneration.Sdk/SourceGeneration.Sdk.csproj -c Release
     - name: Build SourceGeneration package testing helper
