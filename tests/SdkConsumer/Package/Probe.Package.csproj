@@ -1,4 +1,4 @@
-<Project Sdk="Anton.SourceGeneration.Sdk/1.0.0">
+<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0">
   <PropertyGroup>
     <PackageId>Probe.Rules</PackageId>
     <Version>1.0.0</Version>

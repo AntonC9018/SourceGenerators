@@ -16,7 +16,7 @@ public sealed class ProbeCodeFixTests
         await CodeFixTestBuilder
             .For<ProbeAnalyzer, ProbeCodeFix, DefaultVerifier>()
             .WithSource(source)
-            .WithFixedCode("class GoodName\n{ }")
+            .WithFixedCode("class GoodName" + System.Environment.NewLine + "{ }")
             .RunAsync();
     }
 }

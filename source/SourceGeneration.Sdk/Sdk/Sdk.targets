@@ -16,7 +16,7 @@
     <SourceGenerationCodeFixProject>$(MSBuildProjectDirectory)/../CodeFixes/$(SourceGenerationProjectBaseName).CodeFixes.csproj</SourceGenerationCodeFixProject>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsPackage)' == 'true'">
+  <ItemGroup Condition="('$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsPackage)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="PolySharp" Version="$(AntonPolySharpVersion)" PrivateAssets="all" IncludeAssets="build;analyzers" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(AntonRoslynVersion)" PrivateAssets="all" />
@@ -24,12 +24,12 @@
     <PackageReference Include="Anton.Utils.Shared" Version="$(AntonUtilsSharedVersion)" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsCodeFixes)' == 'true'">
+  <ItemGroup Condition="('$(IsCodeFixes)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(AntonRoslynVersion)" PrivateAssets="all" />
     <PackageReference Include="System.Composition.AttributedModel" Version="$(AntonCompositionVersion)" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsTests)' == 'true'">
+  <ItemGroup Condition="('$(IsTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Anton.SourceGeneration" Version="$(AntonSourceGenerationVersion)" />
     <PackageReference Include="Anton.Utils.Shared" Version="$(AntonUtilsSharedVersion)" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
@@ -40,19 +40,19 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(AntonRoslynVersion)" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsSourceGeneratorTests)' == 'true'">
+  <ItemGroup Condition="('$(IsSourceGeneratorTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing" Version="1.1.4" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsAnalyzerTests)' == 'true'">
+  <ItemGroup Condition="('$(IsAnalyzerTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsCodeFixTests)' == 'true'">
+  <ItemGroup Condition="('$(IsCodeFixTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.4" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true'">
+  <ItemGroup Condition="('$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Anton.SourceGeneration.RoslynTesting" Version="$(AntonRoslynTestingVersion)" />
     <Using Include="SourceGeneration.Testing.DiagnosticMarkers" Static="true" />
   </ItemGroup>

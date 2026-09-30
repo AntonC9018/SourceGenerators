@@ -14,7 +14,7 @@ the `Anton.SourceGeneration` helper library. After the SDK is published to NuGet
 use a versioned SDK declaration in each project:
 
 ```xml
-<Project Sdk="Anton.SourceGeneration.Sdk/1.0.0" />
+<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0" />
 ```
 
 Set `PackageId` and `Version` in the `.Package` project when its published
@@ -72,9 +72,51 @@ referenced shared and helper assemblies. A `.Package` project combines its
 analyzer and code fix in one package. The shared assembly and
 `Anton.Utils.Shared` also appear under `lib/netstandard2.0` for consumers.
 
+Starting with SDK 1.1.0, set `AntonSourceGenerationInjectPackages` to `false`
+to manage all package references yourself:
+
+```xml
+<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0">
+  <PropertyGroup>
+    <AntonSourceGenerationInjectPackages>false</AntonSourceGenerationInjectPackages>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Add the PackageReference items required by your project here. -->
+  </ItemGroup>
+</Project>
+```
+
+Set the property in the project body, `Directory.Build.props`, or on the command
+line (`-p:AntonSourceGenerationInjectPackages=false`). `Directory.Build.targets`
+is imported after the package items are evaluated and is too late. Unset values
+and values other than `false` preserve injection; MSBuild compares this value
+without regard to case, so `False` also disables it.
+
+The switch suppresses every SDK-injected package, including
+`Anton.SourceGeneration`, and the package-derived static using for diagnostic
+markers. Project-name role selection, target-framework defaults, sibling project
+references, validation, and packing conventions still apply. Consumers supply
+and maintain compatible versions of the following packages (test-role additions
+apply on top of the `.Tests` row):
+
+| Project suffix | SDK-injected packages |
+| --- | --- |
+| `.SourceGenerator`, `.Analyzers`, `.CodeFixes`, `.Package` | PolySharp; Microsoft.CodeAnalysis.Analyzers; Microsoft.CodeAnalysis.CSharp; Anton.SourceGeneration; Anton.Utils.Shared |
+| `.CodeFixes` (additional) | Microsoft.CodeAnalysis.CSharp.Workspaces; System.Composition.AttributedModel |
+| `.Tests` | Anton.SourceGeneration; Anton.Utils.Shared; Microsoft.NET.Test.Sdk; xunit; xunit.runner.visualstudio; coverlet.collector; Microsoft.CodeAnalysis.CSharp; Microsoft.CodeAnalysis.CSharp.Workspaces |
+| `.SourceGenerator.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing |
+| `.Analyzers.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.Analyzer.Testing; Anton.SourceGeneration.RoslynTesting |
+| `.CodeFixes.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.CodeFix.Testing; Anton.SourceGeneration.RoslynTesting |
+
+The SDK's `Anton*Version` properties no longer select versions for opted-out
+packages. Keep Roslyn versions compatible across your projects and supply
+polyfills if your `netstandard2.0` code needs them without PolySharp. Packing still
+suppresses package dependencies by convention; ensure that required helper
+assemblies are supplied by your own references or package items.
+
 Run `./build/test-sdk-consumer.sh` to pack the SDK and helpers into a temporary
 local NuGet feed, then build and test an external project using
-`<Project Sdk="Anton.SourceGeneration.Sdk/1.0.0">`. The script tests all project
+`<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0">`. The script tests all project
 roles and checks that packed analyzers and generators load in consumer builds.
 The release workflow publishes packages to NuGet.org only on a push to `master`.
 
