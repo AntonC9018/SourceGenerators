@@ -110,9 +110,11 @@ apply on top of the `.Tests` row):
 
 The SDK's `Anton*Version` properties no longer select versions for opted-out
 packages. Keep Roslyn versions compatible across your projects and supply
-polyfills if your `netstandard2.0` code needs them without PolySharp. Packing still
-suppresses package dependencies by convention; ensure that required helper
-assemblies are supplied by your own references or package items.
+polyfills if your `netstandard2.0` code needs them without PolySharp. `.Package`
+projects still set `SuppressDependenciesWhenPacking=true` by convention. Opted-out
+`.SourceGenerator` projects own their `PackageReference` metadata, such as
+`PrivateAssets="all"` for Roslyn and build dependencies. Supply required helper
+assemblies through your own references or package items.
 
 Run `./build/test-sdk-consumer.sh` to pack the SDK and helpers into a temporary
 local NuGet feed, then build and test an external project using
