@@ -1,4 +1,7 @@
 <Project>
     <Import Project="..\build\sdk.props" />
+    <PropertyGroup Condition="'$(IsTests)' == 'true'">
+        <TargetFramework>net11.0</TargetFramework>
+    </PropertyGroup>
     <Import Project="..\build\nuget-packaging.props" />
 </Project>

@@ -1,36 +1,31 @@
 name: .NET
 
-# This workflow should trigger in the following cases:
-#   - The commit is any push in any branch in the repo
-#   - The commit is a published PR from anyone else
-#
-# This setup is done to avoid duplicate runs for the same exact commits, for cases when
-# the PR is done from a branch in this repo, which would already trigger the "push"
-# condition. This way, only PRs from forks will actually trigger the workflow.
-#
-# Because we can't really check these conditions from the global triggers here, they are
-# added to the two root jobs below instead. If canceled, the whole workflow will stop.
+# Validate both pushed commits and pull request merge commits, including owner PRs.
 on: [push, pull_request]
-
-env:
-  EXCLUDE_RUN_ID_FROM_PACKAGE: false
-  EXCLUDE_SUFFIX_FROM_VERSION: false
 
 jobs:
   # Pack all projects with dotnet/MSBuild to generate NuGet packages.
   # This workflow also uploads the resulting packages as artifacts.
   build-packages:
-    if: >-
-      github.event_name == 'push' ||
-      github.event.pull_request.user.login != github.repository_owner
     runs-on: ubuntu-latest
     steps:
     - name: Git checkout
       uses: actions/checkout@v4
     - name: Setup dotnet
       uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+        dotnet-version: 10.0.x
     - name: Build Utils.Shared
       run: dotnet pack source/Utils.Shared/Utils.Shared.csproj -c Release
+    - name: Build SourceGeneration
+      run: dotnet pack source/SourceGeneration/SourceGeneration.csproj -c Release
+    - name: Build SourceGeneration Roslyn testing helper
+      run: dotnet pack source/SourceGeneration.RoslynTesting/SourceGeneration.RoslynTesting.csproj -c Release
+    - name: Build SourceGeneration SDK
+      run: dotnet pack source/SourceGeneration.Sdk/SourceGeneration.Sdk.csproj -c Release
+    - name: Build SourceGeneration package testing helper
+      run: dotnet pack source/SourceGeneration.PackageTesting/SourceGeneration.PackageTesting.csproj -c Release
 
     - name: Build PropertyCacheHelper.Shared
       run: dotnet pack source/SourceGenerators/PropertyCacheHelper/Shared/PropertyCacheHelper.Shared.csproj -c Release
@@ -49,6 +44,8 @@ jobs:
 
     - name: Test
       run: dotnet test SourceGenerators.slnx -c Release
+    - name: Test SDK package from local feed
+      run: ./build/test-sdk-consumer.sh
 
     # Upload the packages to the pipeline artifacts
     - name: Upload package artifacts
@@ -58,27 +55,22 @@ jobs:
         path: artifacts/*.nupkg
         if-no-files-found: error
 
-  # Publish the packages to GitHub packages
-  publish-github:
-    needs: [build-packages]
-    runs-on: ubuntu-latest
-    #if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
-    if: ${{github.event_name == 'push'}}
-    steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: nuget_packages
-        path: artifacts
-    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://nuget.pkg.github.com/${{github.repository_owner}}/index.json" --api-key ${{secrets.GITHUB_TOKEN}} --skip-duplicate
-
-  # Publish the packages to GitHub packages
+  # Publish the packages to NuGet.org
   publish-nuget:
     needs: [build-packages]
     runs-on: ubuntu-latest
     if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
+    permissions:
+      id-token: write
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: nuget_packages
         path: artifacts
-    - run: dotnet nuget push "artifacts/*.nupkg" --source "https://api.nuget.org/v3/index.json" --api-key ${{secrets.NUGET_KEY}} --skip-duplicate
+    - name: NuGet login (OIDC → temporary API key)
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+    - name: Publish packages to NuGet.org
+      run: dotnet nuget push "artifacts/*.nupkg" --source "https://api.nuget.org/v3/index.json" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate

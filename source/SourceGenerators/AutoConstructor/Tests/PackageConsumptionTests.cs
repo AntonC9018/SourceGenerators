@@ -11,18 +11,14 @@ public sealed class PackageConsumptionTests
     {
         var tester = await LocalNuGetPackageTester.CreateAsync();
 
-        await tester.AssertAsync(new PackageConsumptionTest(
-            nameof(AutoConstructorPackage),
-            new[]
-            {
-                new PackageProject(
-                    "source/SourceGenerators/AutoConstructor/SourceGenerator/AutoConstructor.SourceGenerator.csproj"),
-            },
-            new[]
-            {
-                ConsumerFixture.SingleFile(
-                    "source/SourceGenerators/AutoConstructor/Tests/Consumers/AutoConstructor.Basic.cs",
-                    new RunOptions()),
-            }));
+        var test = new PackageConsumptionTestBuilder(nameof(AutoConstructorPackage))
+            .AddPackage(
+                "source/SourceGenerators/AutoConstructor/SourceGenerator/AutoConstructor.SourceGenerator.csproj")
+            .AddSingleFileConsumer(
+                "source/SourceGenerators/AutoConstructor/Tests/Consumers/AutoConstructor.Basic.cs",
+                consumer => consumer.ExpectRun())
+            .Build();
+
+        await tester.AssertAsync(test);
     }
 }

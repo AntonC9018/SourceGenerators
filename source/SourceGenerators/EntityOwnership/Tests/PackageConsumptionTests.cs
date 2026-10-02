@@ -11,18 +11,14 @@ public sealed class PackageConsumptionTests
     {
         var tester = await LocalNuGetPackageTester.CreateAsync();
 
-        await tester.AssertAsync(new PackageConsumptionTest(
-            nameof(EntityOwnershipPackage),
-            new[]
-            {
-                new PackageProject(
-                    "source/SourceGenerators/EntityOwnership/SourceGenerator/EntityOwnership.SourceGenerator.csproj"),
-            },
-            new[]
-            {
-                ConsumerFixture.SingleFile(
-                    "source/SourceGenerators/EntityOwnership/Tests/Consumers/EntityOwnership.Basic.cs",
-                    new RunOptions()),
-            }));
+        var test = new PackageConsumptionTestBuilder(nameof(EntityOwnershipPackage))
+            .AddPackage(
+                "source/SourceGenerators/EntityOwnership/SourceGenerator/EntityOwnership.SourceGenerator.csproj")
+            .AddSingleFileConsumer(
+                "source/SourceGenerators/EntityOwnership/Tests/Consumers/EntityOwnership.Basic.cs",
+                consumer => consumer.ExpectRun())
+            .Build();
+
+        await tester.AssertAsync(test);
     }
 }

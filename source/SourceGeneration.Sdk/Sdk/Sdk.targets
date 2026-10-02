@@ -1,0 +1,118 @@
+<Project>
+  <PropertyGroup>
+    <AntonSourceGenerationVersion Condition="'$(AntonSourceGenerationVersion)' == ''">1.0.0</AntonSourceGenerationVersion>
+    <AntonRoslynTestingVersion Condition="'$(AntonRoslynTestingVersion)' == ''">1.0.0</AntonRoslynTestingVersion>
+    <AntonUtilsSharedVersion Condition="'$(AntonUtilsSharedVersion)' == ''">1.0.1</AntonUtilsSharedVersion>
+    <AntonRoslynVersion Condition="'$(AntonRoslynVersion)' == ''">4.10.0</AntonRoslynVersion>
+    <AntonPolySharpVersion Condition="'$(AntonPolySharpVersion)' == ''">1.14.1</AntonPolySharpVersion>
+    <AntonCompositionVersion Condition="'$(AntonCompositionVersion)' == ''">8.0.0</AntonCompositionVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsTests)' == 'true' or '$(IsPackage)' == 'true'">
+    <SourceGenerationProjectBaseName>$([System.String]::Copy('$(MSBuildProjectName)').Split('.')[0])</SourceGenerationProjectBaseName>
+    <SourceGenerationSharedProject>$(MSBuildProjectDirectory)/../Shared/$(SourceGenerationProjectBaseName).Shared.csproj</SourceGenerationSharedProject>
+    <SourceGenerationGeneratorProject>$(MSBuildProjectDirectory)/../SourceGenerator/$(SourceGenerationProjectBaseName).SourceGenerator.csproj</SourceGenerationGeneratorProject>
+    <SourceGenerationAnalyzerProject>$(MSBuildProjectDirectory)/../Analyzers/$(SourceGenerationProjectBaseName).Analyzers.csproj</SourceGenerationAnalyzerProject>
+    <SourceGenerationCodeFixProject>$(MSBuildProjectDirectory)/../CodeFixes/$(SourceGenerationProjectBaseName).CodeFixes.csproj</SourceGenerationCodeFixProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="('$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsPackage)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="PolySharp" Version="$(AntonPolySharpVersion)" PrivateAssets="all" IncludeAssets="build;analyzers" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(AntonRoslynVersion)" PrivateAssets="all" />
+    <PackageReference Include="Anton.SourceGeneration" Version="$(AntonSourceGenerationVersion)" PrivateAssets="all" />
+    <PackageReference Include="Anton.Utils.Shared" Version="$(AntonUtilsSharedVersion)" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsCodeFixes)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(AntonRoslynVersion)" PrivateAssets="all" />
+    <PackageReference Include="System.Composition.AttributedModel" Version="$(AntonCompositionVersion)" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Anton.SourceGeneration" Version="$(AntonSourceGenerationVersion)" />
+    <PackageReference Include="Anton.Utils.Shared" Version="$(AntonUtilsSharedVersion)" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(AntonRoslynVersion)" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="$(AntonRoslynVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsSourceGeneratorTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing" Version="1.1.4" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsAnalyzerTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsCodeFixTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.4" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <PackageReference Include="Anton.SourceGeneration.RoslynTesting" Version="$(AntonRoslynTestingVersion)" />
+    <Using Include="SourceGeneration.Testing.DiagnosticMarkers" Static="true" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsTests)' == 'true' or '$(IsPackage)' == 'true'">
+    <ProjectReference Include="$(SourceGenerationSharedProject)" Condition="Exists('$(SourceGenerationSharedProject)')" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsCodeFixes)' == 'true' or '$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true' or '$(IsPackage)' == 'true'">
+    <ProjectReference Include="$(SourceGenerationAnalyzerProject)" Condition="Exists('$(SourceGenerationAnalyzerProject)')" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsSourceGeneratorTests)' == 'true'">
+    <ProjectReference Include="$(SourceGenerationGeneratorProject)" Condition="Exists('$(SourceGenerationGeneratorProject)')" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IsCodeFixTests)' == 'true' or '$(IsPackage)' == 'true'">
+    <ProjectReference Include="$(SourceGenerationCodeFixProject)" Condition="Exists('$(SourceGenerationCodeFixProject)')" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(IsSourceGenerator)' == 'true' or '$(IsAnalyzers)' == 'true' or '$(IsCodeFixes)' == 'true' or '$(IsPackage)' == 'true'">
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddSourceGenerationSdkPackageFiles</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <Target Name="ValidateSourceGenerationSdkProject" BeforeTargets="ResolveReferences">
+    <Error
+      Condition="'$(IsSourceGenerator)' != 'true' and '$(IsAnalyzers)' != 'true' and '$(IsCodeFixes)' != 'true' and '$(IsPackage)' != 'true' and '$(IsTests)' != 'true'"
+      Text="Project '$(MSBuildProjectName)' must end in .SourceGenerator, .Analyzers, .CodeFixes, .Package, or .Tests to use Anton.SourceGeneration.Sdk." />
+    <Error
+      Condition="!Exists('$(SourceGenerationSharedProject)')"
+      Text="Project '$(MSBuildProjectName)' requires shared project '$(SourceGenerationSharedProject)'." />
+    <Error
+      Condition="('$(IsCodeFixes)' == 'true' or '$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true' or '$(IsPackage)' == 'true') and !Exists('$(SourceGenerationAnalyzerProject)')"
+      Text="Project '$(MSBuildProjectName)' requires analyzer project '$(SourceGenerationAnalyzerProject)'." />
+    <Error
+      Condition="'$(IsSourceGeneratorTests)' == 'true' and !Exists('$(SourceGenerationGeneratorProject)')"
+      Text="Project '$(MSBuildProjectName)' requires source generator project '$(SourceGenerationGeneratorProject)'." />
+    <Error
+      Condition="('$(IsCodeFixTests)' == 'true' or '$(IsPackage)' == 'true') and !Exists('$(SourceGenerationCodeFixProject)')"
+      Text="Project '$(MSBuildProjectName)' requires code fix project '$(SourceGenerationCodeFixProject)'." />
+  </Target>
+
+  <Target Name="AddSourceGenerationSdkPackageFiles" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <_SourceGenerationSdkProjectDependency Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.ReferenceSourceTarget)' == 'ProjectReference' and '%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+      <_SourceGenerationSdkHelperDependency Include="@(ReferencePath)" Condition="'%(ReferencePath.NuGetPackageId)' == 'Anton.SourceGeneration' or '%(ReferencePath.NuGetPackageId)' == 'Anton.Utils.Shared'" />
+      <TfmSpecificPackageFile Include="$(TargetPath)" Condition="'$(IsPackage)' != 'true'">
+        <PackagePath>analyzers/dotnet/cs</PackagePath>
+      </TfmSpecificPackageFile>
+      <TfmSpecificPackageFile Include="@(_SourceGenerationSdkProjectDependency);@(_SourceGenerationSdkHelperDependency)">
+        <PackagePath>analyzers/dotnet/cs</PackagePath>
+      </TfmSpecificPackageFile>
+      <TfmSpecificPackageFile Include="@(_SourceGenerationSdkProjectDependency)" Condition="'%(_SourceGenerationSdkProjectDependency.Filename)' == '$(SourceGenerationProjectBaseName).Shared'">
+        <PackagePath>lib/netstandard2.0</PackagePath>
+      </TfmSpecificPackageFile>
+      <TfmSpecificPackageFile Include="@(_SourceGenerationSdkHelperDependency)" Condition="'%(_SourceGenerationSdkHelperDependency.NuGetPackageId)' == 'Anton.Utils.Shared'">
+        <PackagePath>lib/netstandard2.0</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>

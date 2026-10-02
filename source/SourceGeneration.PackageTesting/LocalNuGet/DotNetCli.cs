@@ -133,6 +133,18 @@ internal sealed class DotNetTarget
         return CreateCommand("run", _runTargetOption);
     }
 
+    public DotNetCommandBuilder FormatAnalyzers(string diagnosticId)
+    {
+        var command = _baseCommand.WithEnvironmentVariables(
+            environment => environment.Set("Configuration", _configuration));
+        return new DotNetCommandBuilder(command)
+            .Add("format")
+            .Add("analyzers")
+            .Add(_targetPath)
+            .AddOption("--diagnostics", diagnosticId)
+            .Add("--no-restore");
+    }
+
     private DotNetCommandBuilder CreateCommand(
         string verb,
         string? targetOption = null)
@@ -169,6 +181,11 @@ internal sealed class DotNetCommandBuilder
     public DotNetCommandBuilder NoCache()
     {
         return Add("--no-cache");
+    }
+
+    public DotNetCommandBuilder WarningsAsErrors(string diagnosticId)
+    {
+        return Add("-p:WarningsAsErrors=" + diagnosticId);
     }
 
     public DotNetCommandBuilder OutputTo(string path)

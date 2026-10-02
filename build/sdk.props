@@ -25,6 +25,12 @@
     <PropertyGroup>
         <IsTests>false</IsTests>
         <IsTests Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTests>
+        <IsSourceGeneratorTests>false</IsSourceGeneratorTests>
+        <IsSourceGeneratorTests Condition="$(MSBuildProjectName.EndsWith('.SourceGenerator.Tests'))">true</IsSourceGeneratorTests>
+        <IsAnalyzerTests>false</IsAnalyzerTests>
+        <IsAnalyzerTests Condition="$(MSBuildProjectName.EndsWith('.Analyzers.Tests'))">true</IsAnalyzerTests>
+        <IsCodeFixTests>false</IsCodeFixTests>
+        <IsCodeFixTests Condition="$(MSBuildProjectName.EndsWith('.CodeFixes.Tests'))">true</IsCodeFixTests>
     </PropertyGroup>
     <PropertyGroup>
         <IsAnalyzers>false</IsAnalyzers>
@@ -45,7 +51,7 @@
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(IsTests)' == 'true'">
-        <TargetFramework>net11.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <IsPackable>false</IsPackable>
 
         <!-- Unit tests don't need public XML docs -->
