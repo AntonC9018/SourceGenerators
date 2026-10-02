@@ -59,6 +59,7 @@ jobs:
   publish-nuget:
     needs: [build-packages]
     runs-on: ubuntu-latest
+    environment: release
     if: ${{github.event_name == 'push' && github.ref == 'refs/heads/master'}}
     permissions:
       id-token: write
