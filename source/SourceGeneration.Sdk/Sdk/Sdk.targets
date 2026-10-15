@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <AntonSourceGenerationVersion Condition="'$(AntonSourceGenerationVersion)' == ''">1.0.0</AntonSourceGenerationVersion>
-    <AntonRoslynTestingVersion Condition="'$(AntonRoslynTestingVersion)' == ''">1.0.0</AntonRoslynTestingVersion>
+    <AntonRoslynTestingVersion Condition="'$(AntonRoslynTestingVersion)' == ''">1.0.1</AntonRoslynTestingVersion>
     <AntonUtilsSharedVersion Condition="'$(AntonUtilsSharedVersion)' == ''">1.0.1</AntonUtilsSharedVersion>
     <AntonRoslynVersion Condition="'$(AntonRoslynVersion)' == ''">4.10.0</AntonRoslynVersion>
     <AntonPolySharpVersion Condition="'$(AntonPolySharpVersion)' == ''">1.14.1</AntonPolySharpVersion>
@@ -42,6 +42,11 @@
 
   <ItemGroup Condition="('$(IsSourceGeneratorTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing" Version="1.1.4" />
+  </ItemGroup>
+
+  <ItemGroup Condition="('$(IsSourceGeneratorTests)' == 'true' or '$(IsAnalyzerTests)' == 'true' or '$(IsCodeFixTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">
+    <!-- Roslyn Testing 1.1.4 -> NuGet.Packaging 7.0.3 otherwise selects vulnerable PKCS 9.0.6. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
   </ItemGroup>
 
   <ItemGroup Condition="('$(IsAnalyzerTests)' == 'true') and '$(AntonSourceGenerationInjectPackages)' != 'false'">

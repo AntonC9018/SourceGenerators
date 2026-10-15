@@ -5,6 +5,11 @@ and code fix tests. The SourceGeneration SDK references it automatically from
 projects ending in `.Analyzers.Tests` or `.CodeFixes.Tests`, and supplies a
 static using for `InterpolateDiagnostic`.
 
+Version 1.0.1 requires `System.Security.Cryptography.Pkcs` 9.0.21 transitively
+to repair the dependency inherited from Roslyn Testing 1.1.4. Direct package
+consumers receive this dependency too; no advisory suppression is required.
+See [compatible versions and adoption](https://github.com/AntonC9018/SourceGenerators/blob/master/docs/testing-dependencies.md).
+
 ```csharp
 var source = TestCode.Create($$"""
     class C

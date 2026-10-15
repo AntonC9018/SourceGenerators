@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anton.SourceGeneration.RoslynTesting" Version="1.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1" PrivateAssets="all" />
+    <ProjectReference Include="../Analyzers/Probe.Analyzers.csproj" />
+    <ProjectReference Include="../CodeFixes/Probe.CodeFixes.csproj" />
+    <Compile Include="../AnalyzerTests/ProbeAnalyzerTests.cs" Link="ProbeAnalyzerTests.cs" />
+    <Compile Include="../CodeFixTests/ProbeCodeFixTests.cs" Link="ProbeCodeFixTests.cs" />
+    <Using Include="SourceGeneration.Testing.DiagnosticMarkers" Static="true" />
+  </ItemGroup>
+</Project>
