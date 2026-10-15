@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Description>Build analyzer and code fix tests with typed diagnostic markers.</Description>
     <PackageTags>sourcegenerator;analyzer;testing</PackageTags>
   </PropertyGroup>
@@ -11,5 +11,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.4" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.10.0" />
+    <!-- Roslyn Testing 1.1.4 -> NuGet.Packaging 7.0.3 otherwise selects vulnerable PKCS 9.0.6. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
   </ItemGroup>
 </Project>

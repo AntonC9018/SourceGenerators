@@ -40,9 +40,12 @@ for project in \
     "$consumer/SourceGeneratorTests/Probe.SourceGenerator.Tests.csproj" \
     "$consumer/AnalyzerTests/Probe.Analyzers.Tests.csproj" \
     "$consumer/CodeFixTests/Probe.CodeFixes.Tests.csproj" \
+    "$consumer/RoslynTesting/Probe.RoslynTesting.Tests.csproj" \
     "$consumer/GeneralTests/Probe.Tests.csproj" \
     "$consumer/ExplicitPackages/Probe.Bare.Tests.csproj"; do
-    dotnet test "$project" --configuration Release
+    dotnet restore "$project"
+    dotnet build "$project" --configuration Release --no-restore
+    dotnet test "$project" --configuration Release --no-build --no-restore
 done
 
 dotnet pack "$consumer/SourceGenerator/Probe.SourceGenerator.csproj" \
@@ -58,6 +61,23 @@ from zipfile import ZipFile
 
 feed = Path(argv[1])
 consumer = Path(argv[2])
+for role in ["SourceGeneratorTests", "AnalyzerTests", "CodeFixTests", "RoslynTesting"]:
+    role_assets = json.loads((consumer / role / "obj/project.assets.json").read_text())
+    assert "System.Security.Cryptography.Pkcs/9.0.21" in role_assets["libraries"], role
+    restore = role_assets["project"]["restore"]
+    assert restore["warningProperties"]["allWarningsAsErrors"], role
+    assert not restore["warningProperties"].get("warnNotAsError"), role
+    assert restore["restoreAuditProperties"] == {
+        "enableAudit": "true", "auditLevel": "low", "auditMode": "all",
+    }, (role, restore["restoreAuditProperties"])
+
+# A regular Microsoft.NET.Sdk consumer must receive the repair transitively.
+helper_assets = json.loads((consumer / "RoslynTesting/obj/project.assets.json").read_text())
+helper_dependencies = helper_assets["project"]["frameworks"]["net10.0"]["dependencies"]
+assert "System.Security.Cryptography.Pkcs" not in helper_dependencies, helper_dependencies
+helper = helper_assets["targets"]["net10.0"]["Anton.SourceGeneration.RoslynTesting/1.0.1"]
+assert helper["dependencies"]["System.Security.Cryptography.Pkcs"] == "9.0.21", helper
+
 assets = json.loads((consumer / "ExplicitPackages/obj/project.assets.json").read_text())
 # Freeze the direct reference set for the opted-out .Tests role, including versions.
 expected_references = {
@@ -102,10 +122,10 @@ forbidden = {
 assert not packages & forbidden, packages & forbidden
 
 expected = {
-    "Anton.SourceGeneration.RoslynTesting.1.0.0.nupkg": {
+    "Anton.SourceGeneration.RoslynTesting.1.0.1.nupkg": {
         "lib/net10.0/Anton.SourceGeneration.RoslynTesting.dll",
     },
-    "Anton.SourceGeneration.Sdk.1.1.0.nupkg": {
+    "Anton.SourceGeneration.Sdk.1.1.1.nupkg": {
         "Sdk/Sdk.props",
         "Sdk/Sdk.targets",
     },

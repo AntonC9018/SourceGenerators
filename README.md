@@ -14,7 +14,7 @@ the `Anton.SourceGeneration` helper library. After the SDK is published to NuGet
 use a versioned SDK declaration in each project:
 
 ```xml
-<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0" />
+<Project Sdk="Anton.SourceGeneration.Sdk/1.1.1" />
 ```
 
 Set `PackageId` and `Version` in the `.Package` project when its published
@@ -61,6 +61,10 @@ The `.Analyzers.Tests` and `.CodeFixes.Tests` roles reference
 [Roslyn testing README](source/SourceGeneration.RoslynTesting/README.md) for
 `TestCode` and the test builders.
 
+SDK 1.1.1 and RoslynTesting 1.0.1 repair the shared testing dependency graph
+without audit suppressions. See [testing dependencies](docs/testing-dependencies.md)
+for compatible versions, local validation, and adoption from SDK 1.1.0.
+
 SDK source generator, analyzer, and code-fix projects target `netstandard2.0`;
 test projects target `net10.0`.
 Set `TargetFramework` in a project or `Directory.Build.props` to override the
@@ -104,9 +108,9 @@ apply on top of the `.Tests` row):
 | `.SourceGenerator`, `.Analyzers`, `.CodeFixes`, `.Package` | PolySharp; Microsoft.CodeAnalysis.Analyzers; Microsoft.CodeAnalysis.CSharp; Anton.SourceGeneration; Anton.Utils.Shared |
 | `.CodeFixes` (additional) | Microsoft.CodeAnalysis.CSharp.Workspaces; System.Composition.AttributedModel |
 | `.Tests` | Anton.SourceGeneration; Anton.Utils.Shared; Microsoft.NET.Test.Sdk; xunit; xunit.runner.visualstudio; coverlet.collector; Microsoft.CodeAnalysis.CSharp; Microsoft.CodeAnalysis.CSharp.Workspaces |
-| `.SourceGenerator.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing |
-| `.Analyzers.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.Analyzer.Testing; Anton.SourceGeneration.RoslynTesting |
-| `.CodeFixes.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.CodeFix.Testing; Anton.SourceGeneration.RoslynTesting |
+| `.SourceGenerator.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing; System.Security.Cryptography.Pkcs |
+| `.Analyzers.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.Analyzer.Testing; Anton.SourceGeneration.RoslynTesting; System.Security.Cryptography.Pkcs |
+| `.CodeFixes.Tests` (additional) | Microsoft.CodeAnalysis.CSharp.CodeFix.Testing; Anton.SourceGeneration.RoslynTesting; System.Security.Cryptography.Pkcs |
 
 The SDK's `Anton*Version` properties no longer select versions for opted-out
 packages. Keep Roslyn versions compatible across your projects and supply
@@ -118,8 +122,10 @@ assemblies through your own references or package items.
 
 Run `./build/test-sdk-consumer.sh` to pack the SDK and helpers into a temporary
 local NuGet feed, then build and test an external project using
-`<Project Sdk="Anton.SourceGeneration.Sdk/1.1.0">`. The script tests all project
-roles and checks that packed analyzers and generators load in consumer builds.
+`<Project Sdk="Anton.SourceGeneration.Sdk/1.1.1">`. The script restores, builds,
+and tests all project roles and a direct RoslynTesting package consumer with
+normal audit settings, checks the resolved PKCS dependency, and checks that
+packed analyzers and generators load in consumer builds.
 The release workflow publishes packages to NuGet.org only on a push to `master`.
 
 ## Package tests
